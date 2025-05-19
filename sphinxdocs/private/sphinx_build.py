@@ -19,7 +19,7 @@ JsonWorkerResponse = object
 def _main(args: "list[str]") -> int:
     options = _create_parser().parse_args(args)
     if options.persistent_worker:
-        main(["python3", "-m", "sphinx", "build", "-M", "man")
+        main(["python3", "-m", "sphinx", "build", "-M", "man"])
     else:
         main()
     return 0
