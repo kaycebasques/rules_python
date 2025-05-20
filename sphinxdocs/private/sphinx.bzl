@@ -103,7 +103,7 @@ def sphinx_docs(
         strip_prefix = "",
         extra_opts = [],
         tools = [],
-        persistent_worker = False,
+        # persistent_worker = False,
         **kwargs):
     """Generate docs using Sphinx.
 
@@ -166,7 +166,7 @@ def sphinx_docs(
         source_tree = internal_name + "/_sources",
         extra_opts = extra_opts,
         tools = tools,
-        persistent_worker = persistent_worker,
+        # persistent_worker = persistent_worker,
         **kwargs
     )
 
@@ -231,10 +231,10 @@ def _sphinx_docs_impl(ctx):
 _sphinx_docs = rule(
     implementation = _sphinx_docs_impl,
     attrs = {
-        "persistent_worker": attr.bool(
-            doc = "Use a Bazel persistent worker to enable incremental Sphinx builds.",
-            default = False,
-        ),
+        # "persistent_worker": attr.bool(
+        #     doc = "Use a Bazel persistent worker to enable incremental Sphinx builds.",
+        #     default = False,
+        # ),
         "extra_opts": attr.string_list(
             doc = "Additional options to pass onto Sphinx. These are added after " +
                   "other options, but before the source/output args.",
@@ -278,14 +278,16 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix):
     # Build in parallel, if possible
     # Don't add to run_args: parallel building breaks interactive debugging
     args.add("--jobs", "auto")
-    args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
-    run_args.append("--fresh-env")
-    args.add("--write-all")  # Write all files; don't try to detect "changed" files
-    run_args.append("--write-all")
+    # args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
+    # run_args.append("--fresh-env")
+    # args.add("--write-all")  # Write all files; don't try to detect "changed" files
+    # run_args.append("--write-all")
 
-    if ctx.attr.persistent_worker:
-        args.add("--persistent_worker")
-        run_args.append("--persistent_worker")
+    # if ctx.attr.persistent_worker:
+    #     args.add("--persistent_worker")
+    #     run_args.append("--persistent_worker")
+    args.add("--persistent_worker")
+    run_args.append("--persistent_worker")
 
     for opt in ctx.attr.extra_opts:
         expanded = ctx.expand_location(opt)
