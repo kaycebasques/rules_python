@@ -251,19 +251,34 @@ _sphinx_docs = rule(
         "_extra_defines_flag": attr.label(default = "//sphinxdocs:extra_defines"),
         "_extra_env_flag": attr.label(default = "//sphinxdocs:extra_env"),
         "_quiet_flag": attr.label(default = "//sphinxdocs:quiet"),
+        "use_persistent_worker": attr.bool(
+            default = False,
+            doc = "If true, uses the persistent worker for sphinx-build.",
+        ),
     },
 )
 
 def _run_sphinx(ctx, format, source_path, inputs, output_prefix):
     output_dir = ctx.actions.declare_directory(paths.join(output_prefix, format))
+    # Doctrees are placed inside the output_dir for that format.
+    # This ensures that if multiple formats are built, their doctrees are separate,
+    # and also ensures that if the output_dir is cleaned, doctrees are also cleaned.
+    doctree_dir = ctx.actions.declare_directory(paths.join(output_dir.path, ".doctrees"))
 
     run_args = []  # Copy of the args to forward along to debug runner
     args = ctx.actions.args()  # Args passed to the action
+
+    use_persistent_worker = ctx.attr.use_persistent_worker
+    if use_persistent_worker:
+        args.add("--persistent_worker")
+        # Note: run_args is for the non-worker debug runner, so --persistent_worker is not added there.
 
     args.add("--show-traceback")  # Full tracebacks on error
     run_args.append("--show-traceback")
     args.add("--builder", format)
     run_args.extend(("--builder", format))
+    args.add("-d", doctree_dir.path) # Path for doctree cache
+    run_args.extend(("-d", doctree_dir.path))
 
     if ctx.attr._quiet_flag[BuildSettingInfo].value:
         # Not added to run_args because run_args is for debugging
@@ -299,15 +314,18 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix):
     for tool in ctx.attr.tools:
         tools.append(tool[DefaultInfo].files_to_run)
 
+    execution_requirements = {"supports-workers": "1"} if use_persistent_worker else {}
+
     ctx.actions.run(
         executable = ctx.executable.sphinx,
         arguments = [args],
-        inputs = inputs,
-        outputs = [output_dir],
+        inputs = inputs, # These are the source files from _sphinx_source_tree
+        outputs = [output_dir, doctree_dir], # Both output_dir and doctree_dir are generated
         tools = tools,
         mnemonic = "SphinxBuildDocs",
         progress_message = "Sphinx building {} for %{{label}}".format(format),
         env = env,
+        execution_requirements = execution_requirements,
     )
     return output_dir, struct(args = run_args, env = env)
 

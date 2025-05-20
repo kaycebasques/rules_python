@@ -1,4 +1,5 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@bazel_skylib//rules:py_test.bzl", "py_test")
 load("//python/private:util.bzl", "IS_BAZEL_7_OR_HIGHER")  # buildifier: disable=bzl-visibility
 load("//sphinxdocs:sphinx.bzl", "sphinx_build_binary", "sphinx_docs")
 load(":defs.bzl", "gen_directory")
@@ -42,4 +43,37 @@ sphinx_build_binary(
 build_test(
     name = "docs_build_test",
     targets = [":docs"],
+)
+
+# --- Test for Persistent Worker ---
+sphinx_docs(
+    name = "sphinx_docs_test_persistent_worker_html",
+    srcs = ["index.md"], # Keep srcs minimal for this specific test
+    config = "conf.py",
+    formats = ["html"],
+    sphinx = ":sphinx-build",
+    use_persistent_worker = True,
+    target_compatible_with = _TARGET_COMPATIBLE_WITH,
+)
+
+py_test(
+    name = "verify_persistent_worker_output_test",
+    srcs = ["verify_persistent_worker_output.py"],
+    data = [":sphinx_docs_test_persistent_worker_html"],
+    args = ["$(location :sphinx_docs_test_persistent_worker_html)"],
+    python_version = "PY3", # Assuming PY3, adjust if necessary
+    target_compatible_with = _TARGET_COMPATIBLE_WITH,
+    # Ensure the test runs in an environment where it can access the data
+    # For example, if the output is a directory, ensure it's handled correctly.
+    # The $(location) should point to the directory created by sphinx_docs for the html format.
+)
+
+# Grouping tests if you have multiple
+test_suite(
+    name = "sphinx_docs_tests",
+    tests = [
+        ":docs_build_test", # Existing build_test
+        ":verify_persistent_worker_output_test",
+    ],
+    target_compatible_with = _TARGET_COMPATIBLE_WITH,
 )
