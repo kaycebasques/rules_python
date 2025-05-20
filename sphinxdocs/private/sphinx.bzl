@@ -103,6 +103,7 @@ def sphinx_docs(
         strip_prefix = "",
         extra_opts = [],
         tools = [],
+        persistent_worker = False,
         **kwargs):
     """Generate docs using Sphinx.
 
@@ -165,6 +166,7 @@ def sphinx_docs(
         source_tree = internal_name + "/_sources",
         extra_opts = extra_opts,
         tools = tools,
+        persistent_worker = persistent_worker,
         **kwargs
     )
 
