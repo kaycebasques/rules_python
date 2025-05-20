@@ -229,6 +229,10 @@ def _sphinx_docs_impl(ctx):
 _sphinx_docs = rule(
     implementation = _sphinx_docs_impl,
     attrs = {
+        "cache": attr.bool(
+            doc = "Use a Bazel persistent worker to enable incremental Sphinx builds.",
+            default = False,
+        ),
         "extra_opts": attr.string_list(
             doc = "Additional options to pass onto Sphinx. These are added after " +
                   "other options, but before the source/output args.",
