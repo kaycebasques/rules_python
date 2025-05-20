@@ -229,7 +229,7 @@ def _sphinx_docs_impl(ctx):
 _sphinx_docs = rule(
     implementation = _sphinx_docs_impl,
     attrs = {
-        "cache": attr.bool(
+        "persistent_worker": attr.bool(
             doc = "Use a Bazel persistent worker to enable incremental Sphinx builds.",
             default = False,
         ),
@@ -280,6 +280,10 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix):
     run_args.append("--fresh-env")
     args.add("--write-all")  # Write all files; don't try to detect "changed" files
     run_args.append("--write-all")
+
+    if ctx.attr.persistent_worker:
+        args.add("--persistent_worker")
+        run_args.append("--persistent_worker")
 
     for opt in ctx.attr.extra_opts:
         expanded = ctx.expand_location(opt)
