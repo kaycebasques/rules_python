@@ -8,12 +8,6 @@ import typing
 import sphinx
 
 
-def _create_parser() -> "argparse.Namespace":
-    parser = argparse.ArgumentParser(fromfile_prefix_chars="@")
-    parser.add_argument("--persistent_worker", action="store_true")
-    return parser
-
-
 JsonWorkRequest = object
 JsonWorkResponse = object
 
@@ -71,8 +65,7 @@ class _PersistentWorker:
 
 
 def main(args: "list[str]") -> int:
-    options = _create_parser().parse_args(args)
-    if options.persistent_worker:
+    if "--persistent_worker" in sys.argv:
         _PersistentWorker(sys.stdin, sys.stdout).run()
     else:
         sphinx.cmd.build.main()
@@ -80,4 +73,4 @@ def main(args: "list[str]") -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())
