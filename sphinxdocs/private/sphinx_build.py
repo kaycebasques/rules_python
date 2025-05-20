@@ -65,7 +65,7 @@ class _PersistentWorker:
 
 
 def main(args: "list[str]") -> int:
-    if "--persistent_worker" in sys.argv:
+    if "--persistent_worker" in args:
         _PersistentWorker(sys.stdin, sys.stdout).run()
     else:
         sphinx.cmd.build.main()
@@ -73,4 +73,4 @@ def main(args: "list[str]") -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))
