@@ -26,29 +26,28 @@ class _PersistentWorker:
         self._outstream = outstream
 
     def run(self) -> None:
-        try:
-            while True:
-                request = None
-                try:
-                    request = self._get_next_request()
-                    if request is None:
-                        break
-                    response = self._process_request(request)
-                    if response:  # May be none for cancel request
-                        self._send_response(response)
-                except Exception:
-                    output = (
-                        f"Unhandled error:\nRequest: {request}\n"
-                        + traceback.format_exc()
-                    )
-                    request_id = 0 if not request else request.get("requestId", 0)
-                    self._send_response(
-                        {
-                            "exitCode": 3,
-                            "output": output,
-                            "requestId": request_id,
-                        }
-                    )
+        while True:
+            request = None
+            try:
+                request = self._get_next_request()
+                if request is None:
+                    break
+                response = self._process_request(request)
+                if response:  # May be none for cancel request
+                    self._send_response(response)
+            except Exception:
+                output = (
+                    f"Unhandled error:\nRequest: {request}\n"
+                    + traceback.format_exc()
+                )
+                request_id = 0 if not request else request.get("requestId", 0)
+                self._send_response(
+                    {
+                        "exitCode": 3,
+                        "output": output,
+                        "requestId": request_id,
+                    }
+                )
 
     def _get_next_request(self) -> "object | None":
         line = self._instream.readline()
