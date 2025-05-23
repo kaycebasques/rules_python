@@ -304,6 +304,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
         tools.append(tool[DefaultInfo].files_to_run)
 
     if use_cache:
+        args.add("--doctree-dir", paths.join(output_dir.path, ".doctrees"))
         worker_arg_file = ctx.actions.declare_file(ctx.attr.name + ".worker_args")
         ctx.actions.write(
             output = worker_arg_file,
