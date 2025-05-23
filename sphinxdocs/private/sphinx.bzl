@@ -15,7 +15,6 @@
 """Implementation of sphinx rules."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//python:py_binary.bzl", "py_binary")
 load("//python/private:util.bzl", "add_tag", "copy_propagating_kwargs")  # buildifier: disable=bzl-visibility
@@ -104,6 +103,7 @@ def sphinx_docs(
         strip_prefix = "",
         extra_opts = [],
         tools = [],
+        use_cache = False,
         **kwargs):
     """Generate docs using Sphinx.
 
@@ -166,6 +166,7 @@ def sphinx_docs(
         source_tree = internal_name + "/_sources",
         extra_opts = extra_opts,
         tools = tools,
+        use_cache = use_cache,
         **kwargs
     )
 
@@ -177,6 +178,9 @@ def sphinx_docs(
         **common_kwargs
     )
 
+    common_kwargs_with_manual_tag = dict(common_kwargs)
+    common_kwargs_with_manual_tag["tags"] = list(common_kwargs.get("tags") or []) + ["manual"]
+
     py_binary(
         name = name + ".serve",
         srcs = [_SPHINX_SERVE_MAIN_SRC],
@@ -185,17 +189,12 @@ def sphinx_docs(
         args = [
             "$(execpath {})".format(html_name),
         ],
-        **common_kwargs
+        **common_kwargs_with_manual_tag
     )
     sphinx_run(
         name = name + ".run",
         docs = name,
-    )
-
-    build_test(
-        name = name + "_build_test",
-        targets = [name],
-        **kwargs  # kwargs used to pick up target_compatible_with
+        **common_kwargs_with_manual_tag
     )
 
 def _sphinx_docs_impl(ctx):
@@ -212,6 +211,7 @@ def _sphinx_docs_impl(ctx):
             source_path = source_dir_path,
             output_prefix = paths.join(ctx.label.name, "_build"),
             inputs = inputs,
+            use_cache = ctx.attr.use_cache,
         )
         outputs[format] = output_dir
         per_format_args[format] = args_env
@@ -243,7 +243,7 @@ _sphinx_docs = rule(
         ),
         "sphinx": attr.label(
             executable = True,
-            cfg = "exec",
+            cfg = "host",
             mandatory = True,
             doc = "Sphinx binary to generate documentation.",
         ),
@@ -251,17 +251,25 @@ _sphinx_docs = rule(
             cfg = "exec",
             doc = "Additional tools that are used by Sphinx and its plugins.",
         ),
+        "use_cache": attr.bool(
+            doc = "TODO",
+            default = False,
+        ),
         "_extra_defines_flag": attr.label(default = "//sphinxdocs:extra_defines"),
         "_extra_env_flag": attr.label(default = "//sphinxdocs:extra_env"),
         "_quiet_flag": attr.label(default = "//sphinxdocs:quiet"),
     },
 )
 
-def _run_sphinx(ctx, format, source_path, inputs, output_prefix):
+def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
+
     output_dir = ctx.actions.declare_directory(paths.join(output_prefix, format))
 
     run_args = []  # Copy of the args to forward along to debug runner
     args = ctx.actions.args()  # Args passed to the action
+
+    args.add(source_path)
+    args.add(output_dir.path)
 
     args.add("--show-traceback")  # Full tracebacks on error
     run_args.append("--show-traceback")
@@ -275,10 +283,14 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix):
     # Build in parallel, if possible
     # Don't add to run_args: parallel building breaks interactive debugging
     args.add("--jobs", "auto")
-    args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
-    run_args.append("--fresh-env")
-    args.add("--write-all")  # Write all files; don't try to detect "changed" files
-    run_args.append("--write-all")
+
+    if use_cache:
+        args.add("--doctree-dir", paths.join(output_dir.path, ".doctrees"))
+    else:
+        args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
+        run_args.append("--fresh-env")
+        args.add("--write-all")  # Write all files; don't try to detect "changed" files
+        run_args.append("--write-all")
 
     for opt in ctx.attr.extra_opts:
         expanded = ctx.expand_location(opt)
@@ -290,8 +302,6 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix):
     for define in extra_defines:
         run_args.extend(("--define", define))
 
-    args.add(source_path)
-    args.add(output_dir.path)
 
     env = dict([
         v.split("=", 1)
@@ -302,16 +312,41 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix):
     for tool in ctx.attr.tools:
         tools.append(tool[DefaultInfo].files_to_run)
 
-    ctx.actions.run(
-        executable = ctx.executable.sphinx,
-        arguments = [args],
-        inputs = inputs,
-        outputs = [output_dir],
-        tools = tools,
-        mnemonic = "SphinxBuildDocs",
-        progress_message = "Sphinx building {} for %{{label}}".format(format),
-        env = env,
-    )
+    if use_cache:
+        worker_arg_file = ctx.actions.declare_file(ctx.attr.name + ".worker_args")
+        ctx.actions.write(
+            output = worker_arg_file,
+            content = args,
+        )
+        all_inputs = depset(
+            direct = [worker_arg_file],
+            transitive = [inputs]
+        )
+        ctx.actions.run(
+            executable = ctx.executable.sphinx,
+            arguments = ["@" + worker_arg_file.path],
+            inputs = all_inputs,
+            outputs = [output_dir],
+            tools = tools,
+            mnemonic = "SphinxBuildDocsCache",
+            progress_message = "Sphinx building {} for %{{label}}".format(format),
+            env = env,
+            execution_requirements = {
+                "supports-workers": "1",
+                "requires-worker-protocol": "json"
+            }
+        )
+    else:
+        ctx.actions.run(
+            executable = ctx.executable.sphinx,
+            arguments = [args],
+            inputs = inputs,
+            outputs = [output_dir],
+            tools = tools,
+            mnemonic = "SphinxBuildDocsNoCache",
+            progress_message = "Sphinx building {} for %{{label}}".format(format),
+            env = env,
+        )
     return output_dir, struct(args = run_args, env = env)
 
 def _sphinx_source_tree_impl(ctx):
