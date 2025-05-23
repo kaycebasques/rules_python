@@ -307,22 +307,37 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
     for tool in ctx.attr.tools:
         tools.append(tool[DefaultInfo].files_to_run)
 
-    execution_requirements = {
-        "supports-workers": ("1" if use_cache else "0"),
-        "requires-worker-protocol" : "json"
-    }
-
-    ctx.actions.run(
-        executable = ctx.executable.sphinx,
-        arguments = [args],
-        inputs = inputs,
-        outputs = [output_dir],
-        tools = tools,
-        mnemonic = "SphinxBuildDocs",
-        progress_message = "Sphinx building {} for %{{label}}".format(format),
-        env = env,
-        execution_requirements = execution_requirements
-    )
+    if use_cache:
+        worker_arg_file = ctx.actions.declare_file(ctx.attr.name + ".worker_args")
+        ctx.actions.write(
+            output = worker_arg_file,
+            content = args,
+        )
+        ctx.actions.run(
+            executable = ctx.executable.sphinx,
+            inputs = [inputs, worker_arg_file],
+            arguments = ["@" + worker_arg_file.path],
+            outputs = [output_dir],
+            tools = tools,
+            mnemonic = "SphinxBuildDocs",
+            progress_message = "Sphinx building {} for %{{label}}".format(format),
+            env = env,
+            execution_requirements = {
+                "supports-workers": "1",
+                "requires-worker-protocol": "json"
+            }
+        )
+    else:
+        ctx.actions.run(
+            executable = ctx.executable.sphinx,
+            arguments = [args],
+            inputs = inputs,
+            outputs = [output_dir],
+            tools = tools,
+            mnemonic = "SphinxBuildDocs",
+            progress_message = "Sphinx building {} for %{{label}}".format(format),
+            env = env,
+        )
     return output_dir, struct(args = run_args, env = env)
 
 def _sphinx_source_tree_impl(ctx):
