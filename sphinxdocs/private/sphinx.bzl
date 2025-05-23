@@ -308,7 +308,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
         tools.append(tool[DefaultInfo].files_to_run)
 
     execution_requirements = {
-        "supports-workers": "1" if use_cache else "0",
+        "supports-workers": ("1" if use_cache else "0"),
         "requires-worker-protocol" : "json",
     },
 
