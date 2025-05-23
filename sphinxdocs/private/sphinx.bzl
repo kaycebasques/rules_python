@@ -243,7 +243,7 @@ _sphinx_docs = rule(
         ),
         "sphinx": attr.label(
             executable = True,
-            cfg = "exec",
+            cfg = "host",
             mandatory = True,
             doc = "Sphinx binary to generate documentation.",
         ),
