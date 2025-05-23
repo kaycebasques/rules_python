@@ -281,6 +281,14 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
     # Don't add to run_args: parallel building breaks interactive debugging
     args.add("--jobs", "auto")
 
+    if use_cache:
+        args.add("--doctree-dir", paths.join(output_dir.path, ".doctrees"))
+    else:
+        args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
+        run_args.append("--fresh-env")
+        args.add("--write-all")  # Write all files; don't try to detect "changed" files
+        run_args.append("--write-all")
+
     for opt in ctx.attr.extra_opts:
         expanded = ctx.expand_location(opt)
         args.add(expanded)
@@ -304,7 +312,6 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
         tools.append(tool[DefaultInfo].files_to_run)
 
     if use_cache:
-        args.add("--doctree-dir", paths.join(output_dir.path, ".doctrees"))
         worker_arg_file = ctx.actions.declare_file(ctx.attr.name + ".worker_args")
         ctx.actions.write(
             output = worker_arg_file,
@@ -316,8 +323,8 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
         )
         ctx.actions.run(
             executable = ctx.executable.sphinx,
-            inputs = all_inputs,
             arguments = ["@" + worker_arg_file.path],
+            inputs = all_inputs,
             outputs = [output_dir],
             tools = tools,
             mnemonic = "SphinxBuildDocsCache",
@@ -329,10 +336,6 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
             }
         )
     else:
-        args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
-        run_args.append("--fresh-env")
-        args.add("--write-all")  # Write all files; don't try to detect "changed" files
-        run_args.append("--write-all")
         ctx.actions.run(
             executable = ctx.executable.sphinx,
             arguments = [args],
