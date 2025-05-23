@@ -72,7 +72,7 @@ class Worker:
             return None
         # args, unknown = parser.parse_known_args()
         # _echo(parser.parse_args(args=request["arguments"]), True)
-        main()
+        main(request["arguments"])
         response = {
             "requestId": request.get("requestId", 0),
             "exitCode": 0,
