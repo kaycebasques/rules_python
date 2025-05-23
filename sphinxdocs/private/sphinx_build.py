@@ -91,4 +91,5 @@ if __name__ == "__main__":
     if args.persistent_worker:
         Worker(sys.stdin, sys.stdout).run()
     else:
+        sys.exit(sys.argv)
         sys.exit(main())
