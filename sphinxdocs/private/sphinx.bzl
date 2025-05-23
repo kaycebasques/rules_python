@@ -309,8 +309,8 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
 
     execution_requirements = {
         "supports-workers": ("1" if use_cache else "0"),
-        "requires-worker-protocol" : "json",
-    },
+        "requires-worker-protocol" : "json"
+    }
 
     ctx.actions.run(
         executable = ctx.executable.sphinx,
