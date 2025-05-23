@@ -321,7 +321,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
         mnemonic = "SphinxBuildDocs",
         progress_message = "Sphinx building {} for %{{label}}".format(format),
         env = env,
-        execution_requirements = execution_requirements,
+        execution_requirements = execution_requirements
     )
     return output_dir, struct(args = run_args, env = env)
 
