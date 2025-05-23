@@ -280,10 +280,6 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
     # Build in parallel, if possible
     # Don't add to run_args: parallel building breaks interactive debugging
     args.add("--jobs", "auto")
-    args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
-    run_args.append("--fresh-env")
-    args.add("--write-all")  # Write all files; don't try to detect "changed" files
-    run_args.append("--write-all")
 
     for opt in ctx.attr.extra_opts:
         expanded = ctx.expand_location(opt)
@@ -332,6 +328,10 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
             }
         )
     else:
+        args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
+        run_args.append("--fresh-env")
+        args.add("--write-all")  # Write all files; don't try to detect "changed" files
+        run_args.append("--write-all")
         ctx.actions.run(
             executable = ctx.executable.sphinx,
             arguments = [args],
