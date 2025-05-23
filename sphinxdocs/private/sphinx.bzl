@@ -103,6 +103,7 @@ def sphinx_docs(
         strip_prefix = "",
         extra_opts = [],
         tools = [],
+        use_cache = False,
         **kwargs):
     """Generate docs using Sphinx.
 
@@ -165,6 +166,7 @@ def sphinx_docs(
         source_tree = internal_name + "/_sources",
         extra_opts = extra_opts,
         tools = tools,
+        use_cache = use_cache,
         **kwargs
     )
 
@@ -209,6 +211,7 @@ def _sphinx_docs_impl(ctx):
             source_path = source_dir_path,
             output_prefix = paths.join(ctx.label.name, "_build"),
             inputs = inputs,
+            use_cache = ctx.attr.use_cache,
         )
         outputs[format] = output_dir
         per_format_args[format] = args_env
@@ -248,13 +251,21 @@ _sphinx_docs = rule(
             cfg = "exec",
             doc = "Additional tools that are used by Sphinx and its plugins.",
         ),
+        "use_cache": attr.bool(
+            doc = "TODO",
+            default = False,
+        ),
         "_extra_defines_flag": attr.label(default = "//sphinxdocs:extra_defines"),
         "_extra_env_flag": attr.label(default = "//sphinxdocs:extra_env"),
         "_quiet_flag": attr.label(default = "//sphinxdocs:quiet"),
     },
 )
 
-def _run_sphinx(ctx, format, source_path, inputs, output_prefix):
+def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
+
+    if use_cache:
+        fail("cache was requested")
+
     output_dir = ctx.actions.declare_directory(paths.join(output_prefix, format))
 
     run_args = []  # Copy of the args to forward along to debug runner
