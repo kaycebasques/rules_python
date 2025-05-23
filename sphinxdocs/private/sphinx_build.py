@@ -71,6 +71,7 @@ class Worker:
         # args, unknown = parser.parse_known_args()
         # _echo(parser.parse_args(args=request["arguments"]), True)
         args = [os.path.abspath(__file__)] + request["arguments"]
+        sys.exit(args)
         main(args)
         response = {
             "requestId": request.get("requestId", 0),
