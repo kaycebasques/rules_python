@@ -263,9 +263,6 @@ _sphinx_docs = rule(
 
 def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
 
-    if use_cache:
-        fail("cache was requested")
-
     output_dir = ctx.actions.declare_directory(paths.join(output_prefix, format))
 
     run_args = []  # Copy of the args to forward along to debug runner
@@ -310,6 +307,11 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
     for tool in ctx.attr.tools:
         tools.append(tool[DefaultInfo].files_to_run)
 
+    execution_requirements = {
+        "supports-workers": "1" if use_cache else "0",
+        "requires-worker-protocol" : "json",
+    },
+
     ctx.actions.run(
         executable = ctx.executable.sphinx,
         arguments = [args],
@@ -319,6 +321,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
         mnemonic = "SphinxBuildDocs",
         progress_message = "Sphinx building {} for %{{label}}".format(format),
         env = env,
+        execution_requirements = execution_requirements,
     )
     return output_dir, struct(args = run_args, env = env)
 
