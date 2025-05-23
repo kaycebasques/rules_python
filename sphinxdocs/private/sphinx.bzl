@@ -320,7 +320,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
             arguments = ["@" + worker_arg_file.path],
             outputs = [output_dir],
             tools = tools,
-            mnemonic = "SphinxBuildDocs",
+            mnemonic = "SphinxBuildDocsCache",
             progress_message = "Sphinx building {} for %{{label}}".format(format),
             env = env,
             execution_requirements = {
@@ -339,7 +339,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
             inputs = inputs,
             outputs = [output_dir],
             tools = tools,
-            mnemonic = "SphinxBuildDocs",
+            mnemonic = "SphinxBuildDocsNoCache",
             progress_message = "Sphinx building {} for %{{label}}".format(format),
             env = env,
         )

@@ -18,8 +18,6 @@ WorkResponse = object
 parser = argparse.ArgumentParser(
     fromfile_prefix_chars='@'
 )
-parser.add_argument("--in")
-parser.add_argument("--out")
 parser.add_argument("--persistent_worker", action="store_true")
 
 
@@ -72,7 +70,6 @@ class Worker:
             return None
         # args, unknown = parser.parse_known_args()
         # _echo(parser.parse_args(args=request["arguments"]), True)
-        fail(request["arguments"])
         main(request["arguments"])
         response = {
             "requestId": request.get("requestId", 0),
@@ -83,6 +80,10 @@ class Worker:
     def _send_response(self, response: "WorkResponse") -> None:
         self._outstream.write(json.dumps(response) + "\n")
         self._outstream.flush()
+
+
+# Request: {'arguments': ['--show-traceback', '--builder', 'html', '--quiet', '--jobs', 'auto', '--silent', '--fail-on-warning', 'bazel-out/k8-fastbuild/bin/docs/_docs/_sources', 'bazel-out/k8-fastbuild/bin/docs/docs/_build/html', '--doctree-dir', 'bazel-out/k8-fastbuild/bin/docs/docs/_build/html/.doctrees'], 'inputs': [{'path': 'bazel-out/k8-fastbuild/bin/docs/_docs/_sources/conf.py', 'digest': 'ZGQ3NmEyMTBiNDgzZThiMzM4ODY5YzE1NmVlMGRjNzQwNmEyZDllYzI5NGM0MGJhZDJmYThiYjY4Mjc3NmE1ZQ=='}, {'path': 'bazel-out/k8-fastbuild/bin/docs/_docs/_sources/doxygen/doxygen/_2public_2pw__async2_2dispatcher_8h_source.html',
+# 
 
 
 if __name__ == "__main__":
