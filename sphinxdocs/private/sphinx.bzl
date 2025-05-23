@@ -313,9 +313,13 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
             output = worker_arg_file,
             content = args,
         )
+        all_inputs = depset(
+            direct = [worker_arg_file],
+            transitive = [inputs]
+        )
         ctx.actions.run(
             executable = ctx.executable.sphinx,
-            inputs = [inputs, worker_arg_file],
+            inputs = all_inputs,
             arguments = ["@" + worker_arg_file.path],
             outputs = [output_dir],
             tools = tools,
