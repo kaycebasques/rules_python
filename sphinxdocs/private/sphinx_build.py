@@ -20,8 +20,8 @@ WorkResponse = object
 parser = argparse.ArgumentParser(
     fromfile_prefix_chars='@'
 )
-parser.add_argument('srcdir')
-parser.add_argument('outdir')
+# parser.add_argument('srcdir')
+# parser.add_argument('outdir')
 parser.add_argument("--persistent_worker", action="store_true")
 parser.add_argument("--doctree-dir")
 
@@ -105,7 +105,8 @@ class Worker:
         for path in tmp:
             if not path.endswith(".rst"):
                 continue
-            docname = path.replace(args.srcdir, "")
+            srcdir = self.args[0]
+            docname = path.replace(srcdir, "")
             docname = docname.replace(".rst", "")
             digest.append(docname)
         # Make the doctree dir so that we have a place to store the digest.
