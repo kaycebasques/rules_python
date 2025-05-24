@@ -136,7 +136,8 @@ class Worker:
             return None
         self.args = request["arguments"]
         # self._update_digest(request)
-        main(request["arguments"])
+        sys.exit(self.args)
+        main(self.args)
         self._store_cache()
         response = {
             "requestId": request.get("requestId", 0),
