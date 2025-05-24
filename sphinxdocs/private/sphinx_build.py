@@ -71,7 +71,6 @@ class Worker:
         # args, unknown = parser.parse_known_args()
         # _echo(parser.parse_args(args=request["arguments"]), True)
         args = [os.path.abspath(__file__)] + request["arguments"]
-        sys.exit(args)
         main(args)
         response = {
             "requestId": request.get("requestId", 0),
@@ -93,5 +92,4 @@ if __name__ == "__main__":
     if args.persistent_worker:
         Worker(sys.stdin, sys.stdout).run()
     else:
-        sys.exit(sys.argv)
         sys.exit(main())
