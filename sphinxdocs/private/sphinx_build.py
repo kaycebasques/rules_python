@@ -18,7 +18,8 @@ WorkResponse = object
 parser = argparse.ArgumentParser(
     fromfile_prefix_chars='@'
 )
-# TODO: Parse the source and build dir paths.
+parser.add_argument('srcdir')
+parser.add_argument('outdir')
 parser.add_argument("--persistent_worker", action="store_true")
 parser.add_argument("--doctree-dir")
 
@@ -76,6 +77,7 @@ class Worker:
         return self._value
 
     def _update_digest(self, request):
+        args, unknown = parser.parse_known_args(request["arguments"])
         # Make room for the new build's data. 
         self._previous = self._current
         # Rearrange the new data into a dict to make comparisons easier.
@@ -84,20 +86,27 @@ class Worker:
             path = page["path"]
             self._current[path] = page["digest"]
         # Compare the content hashes to determine what pages have changed.
-        digest = []
+        tmp = []
         for path in self._current:
             if path not in self._previous:
-                digest.append({"path": path, "reason": "added"})
+                tmp.append(path)
                 continue
             if self._current[path] != self._previous[path]:
-                digest.append({"path": path, "reason": "changed"})
+                tmp.append(path)
                 continue
         for path in self._previous:
             if path not in self._current:
-                digest.append({"path": path, "reason": "deleted"})
+                tmp.append(path)
                 continue
+        # Normalize the paths into docnames
+        digest = []
+        for path in tmp:
+            if not path.endswith(".rst"):
+                continue
+            docname = path.replace(args.srcdir, "")
+            docname = docname.replace(".rst", "")
+            digest.append(docname)
         # Make the doctree dir so that we have a place to store the digest.
-        args, unknown = parser.parse_known_args(request["arguments"])
         doctree_dir = pathlib.Path(args.doctree_dir)
         doctree_dir.mkdir(parents=True, exist_ok=True)
         # Save the digest.
