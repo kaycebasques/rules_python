@@ -80,7 +80,7 @@ class Worker:
             doctree_dir = pathlib.Path(args[index + 1])
             doctree_dir.mkdir(parents=True, exist_ok=True)
             with open(doctree_dir / pathlib.Path("digest.json"), "w") as f:
-                f.dump(inputs, indent=4)
+                json.dump(inputs, f, indent=4)
         main(args)
         response = {
             "requestId": request.get("requestId", 0),
