@@ -112,7 +112,11 @@ class Worker:
             digest.append(docname)
         args, unknown = parser.parse_known_args(self.args)
         # Save the digest.
-        with open(args.doctree_dir / Path("digest.json"), "w") as f:
+        doctree_dir = Path(args.doctree_dir)
+        # On a fresh build, _restore_cache() does nothing, so this dir won't exist yet.
+        if not doctree_dir.is_dir():
+            doctree_dir.mkdir()
+        with open(doctree_dir / Path("digest.json"), "w") as f:
             json.dump(digest, f, indent=2)
 
     def _restore_cache(self):
