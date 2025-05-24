@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(
 )
 # TODO: Parse the source and build dir paths.
 parser.add_argument("--persistent_worker", action="store_true")
-parser.add_argument("--doctree_dir")
+parser.add_argument("--doctree-dir")
 
 
 class Worker:
