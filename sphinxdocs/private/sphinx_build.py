@@ -77,8 +77,9 @@ class Worker:
         for index, arg in enumerate(args):
             if arg != "--doctree-dir":
                 continue
-            doctree_dir = args[index + 1]
-            with open(pathlib.Path(doctree_dir) / pathlib.Path("digest.json"), "w") as f:
+            doctree_dir = pathlib.path(args[index + 1])
+            doctree_dir.mkdir(parents=True, exist_ok=True)
+            with open(doctree_dir / pathlib.Path("digest.json"), "w") as f:
                 f.dump(inputs, indent=4)
         main(args)
         response = {
