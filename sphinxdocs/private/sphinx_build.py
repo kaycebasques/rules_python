@@ -110,8 +110,9 @@ class Worker:
             docname = path.replace(srcdir, "")
             docname = docname.replace(".rst", "")
             digest.append(docname)
+        args, unknown = parser.parse_known_args(self.args)
         # Save the digest.
-        with open(doctree_dir / Path("digest.json"), "w") as f:
+        with open(args.doctree_dir / Path("digest.json"), "w") as f:
             json.dump(digest, f, indent=2)
 
     def _restore_cache(self):
