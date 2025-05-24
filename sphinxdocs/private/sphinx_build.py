@@ -19,6 +19,7 @@ parser = argparse.ArgumentParser(
     fromfile_prefix_chars='@'
 )
 parser.add_argument("--persistent_worker", action="store_true")
+parser.add_argument("--doctree_dir")
 
 
 class Worker:
@@ -68,8 +69,17 @@ class Worker:
     def _process_request(self, request: "WorkRequest") -> "WorkResponse | None":
         if request.get("cancel"):
             return None
-        sys.exit(request.keys())
+        inputs = request["inputs"]
+        # for input in inputs:
+        #     path = input["path"]
+        #     digest = input["digest"]
         args = request["arguments"]
+        for arg in enumerate(index, args):
+            if arg != "--doctree-dir":
+                continue
+            doctree_dir = args[index + 1]
+            with open(pathlib.Path(doctree_dir) / pathlib.Path("digest.json"), "w") as f:
+                f.dump(inputs, indent=4)
         main(args)
         response = {
             "requestId": request.get("requestId", 0),
