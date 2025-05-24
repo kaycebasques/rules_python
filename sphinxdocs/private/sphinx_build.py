@@ -69,7 +69,6 @@ class Worker:
         if request.get("cancel"):
             return None
         args = request["arguments"]
-        sys.exit(args)
         main(args)
         response = {
             "requestId": request.get("requestId", 0),
