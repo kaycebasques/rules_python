@@ -108,7 +108,7 @@ class Worker:
         if request.get("cancel"):
             return None
         self._update_digest(request)
-        main(args)
+        main(request["arguments"])
         # TODO: Cache the pickles in-memory.
         response = {
             "requestId": request.get("requestId", 0),
