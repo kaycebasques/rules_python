@@ -115,7 +115,7 @@ class Worker:
         doctree_dir = Path(args.doctree_dir)
         # On a fresh build, _restore_cache() does nothing, so this dir won't exist yet.
         if not doctree_dir.is_dir():
-            doctree_dir.mkdir()
+            doctree_dir.mkdir(parents=True)
         with open(doctree_dir / Path("digest.json"), "w") as f:
             json.dump(digest, f, indent=2)
 
@@ -124,7 +124,7 @@ class Worker:
             data = self._cache[filepath]
             parent = Path(os.path.dirname(filepath))
             if not parent.is_dir():
-                parent.mkdir()
+                parent.mkdir(parents=True)
             with open(filepath, "wb") as f:
                 f.write(data)
 
