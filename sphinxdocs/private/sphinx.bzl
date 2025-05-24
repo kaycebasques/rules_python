@@ -268,6 +268,9 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
     run_args = []  # Copy of the args to forward along to debug runner
     args = ctx.actions.args()  # Args passed to the action
 
+    args.add(source_path)
+    args.add(output_dir.path)
+
     args.add("--show-traceback")  # Full tracebacks on error
     run_args.append("--show-traceback")
     args.add("--builder", format)
@@ -299,8 +302,6 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
     for define in extra_defines:
         run_args.extend(("--define", define))
 
-    args.add(source_path)
-    args.add(output_dir.path)
 
     env = dict([
         v.split("=", 1)
