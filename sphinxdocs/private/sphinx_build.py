@@ -68,7 +68,7 @@ class Worker:
     def _process_request(self, request: "WorkRequest") -> "WorkResponse | None":
         if request.get("cancel"):
             return None
-        sys.exit(dir(request))
+        sys.exit(request.keys())
         args = request["arguments"]
         main(args)
         response = {
