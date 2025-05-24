@@ -74,7 +74,7 @@ class Worker:
         #     path = input["path"]
         #     digest = input["digest"]
         args = request["arguments"]
-        for arg in enumerate(index, args):
+        for index, arg in enumerate(args):
             if arg != "--doctree-dir":
                 continue
             doctree_dir = args[index + 1]
