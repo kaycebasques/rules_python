@@ -18,6 +18,7 @@ WorkResponse = object
 parser = argparse.ArgumentParser(
     fromfile_prefix_chars='@'
 )
+# TODO: Parse the source and build dir paths.
 parser.add_argument("--persistent_worker", action="store_true")
 parser.add_argument("--doctree_dir")
 
@@ -30,6 +31,8 @@ class Worker:
         self._logger = logging.getLogger("worker")
         logging.basicConfig(filename='echo.log', encoding='utf-8', level=logging.DEBUG)
         self._logger.info("starting worker")
+        self._current = {}
+        self._previous = {}
 
     def run(self) -> None:
         try:
@@ -66,22 +69,47 @@ class Worker:
             return None
         return json.loads(line)
 
+    @property
+    def inputs(self):
+        self._previous
+        self._current
+        return self._value
+
+    def _update_digest(self, request):
+        # Make room for the new build's data. 
+        self._previous = self._current
+        # Rearrange the new data into a dict to make comparisons easier.
+        self._current = {}
+        for page in request["inputs"]:
+            path = page["path"]
+            self._current[path] = page["digest"]
+        # Compare the content hashes to determine what pages have changed.
+        digest = []
+        for path in self._current:
+            if path not in self._previous:
+                digest.append({"path": path, "reason": "added"})
+                continue
+            if self._current[path] != self._previous[path]:
+                digest.append({"path": path, "reason": "changed"})
+                continue
+        for path in self._previous:
+            if path not in self._current:
+                digest.append({"path": path, "reason": "deleted"})
+                continue
+        # Make the doctree dir so that we have a place to store the digest.
+        args, unknown = parser.parse_known_args(request["arguments"])
+        doctree_dir = pathlib.Path(args.doctree_dir)
+        doctree_dir.mkdir(parents=True, exist_ok=True)
+        # Save the digest.
+        with open(doctree_dir / pathlib.Path("digest.json"), "w") as f:
+            json.dump(digest, f, indent=2)
+
     def _process_request(self, request: "WorkRequest") -> "WorkResponse | None":
         if request.get("cancel"):
             return None
-        inputs = request["inputs"]
-        # for input in inputs:
-        #     path = input["path"]
-        #     digest = input["digest"]
-        args = request["arguments"]
-        for index, arg in enumerate(args):
-            if arg != "--doctree-dir":
-                continue
-            doctree_dir = pathlib.Path(args[index + 1])
-            doctree_dir.mkdir(parents=True, exist_ok=True)
-            with open(doctree_dir / pathlib.Path("digest.json"), "w") as f:
-                json.dump(inputs, f, indent=4)
+        self._update_digest(request)
         main(args)
+        # TODO: Cache the pickles in-memory.
         response = {
             "requestId": request.get("requestId", 0),
             "exitCode": 0,
@@ -91,10 +119,6 @@ class Worker:
     def _send_response(self, response: "WorkResponse") -> None:
         self._outstream.write(json.dumps(response) + "\n")
         self._outstream.flush()
-
-
-# Request: {'arguments': ['--show-traceback', '--builder', 'html', '--quiet', '--jobs', 'auto', '--silent', '--fail-on-warning', 'bazel-out/k8-fastbuild/bin/docs/_docs/_sources', 'bazel-out/k8-fastbuild/bin/docs/docs/_build/html', '--doctree-dir', 'bazel-out/k8-fastbuild/bin/docs/docs/_build/html/.doctrees'], 'inputs': [{'path': 'bazel-out/k8-fastbuild/bin/docs/_docs/_sources/conf.py', 'digest': 'ZGQ3NmEyMTBiNDgzZThiMzM4ODY5YzE1NmVlMGRjNzQwNmEyZDllYzI5NGM0MGJhZDJmYThiYjY4Mjc3NmE1ZQ=='}, {'path': 'bazel-out/k8-fastbuild/bin/docs/_docs/_sources/doxygen/doxygen/_2public_2pw__async2_2dispatcher_8h_source.html',
-# 
 
 
 if __name__ == "__main__":
