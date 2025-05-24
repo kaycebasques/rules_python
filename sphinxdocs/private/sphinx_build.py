@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import argparse
 import json
 import logging
@@ -107,18 +109,35 @@ class Worker:
             docname = docname.replace(".rst", "")
             digest.append(docname)
         # Make the doctree dir so that we have a place to store the digest.
-        doctree_dir = pathlib.Path(args.doctree_dir)
+        doctree_dir = Path(args.doctree_dir)
         doctree_dir.mkdir(parents=True, exist_ok=True)
         # Save the digest.
-        with open(doctree_dir / pathlib.Path("digest.json"), "w") as f:
+        with open(doctree_dir / Path("digest.json"), "w") as f:
             json.dump(digest, f, indent=2)
+
+    def _store_cache(self):
+        args, unknown = parser.parse_known_args(self.args)
+        self._cache = {}
+        for root, _, files in os.walk(args.doctree_dir):
+            for filename in files:
+                filepath = Path(root) / Path(filename)
+                self._cache[str(filepath)] = None
+                # try:
+                #     with open(filepath, 'r', encoding='utf-8') as f:
+                #         content = f.read()
+                #         all_file_contents[filepath] = content
+                # except Exception as e:
+                #     print(f"Error loading file {filepath}: {e}")
+        sys.exit(self._cache)
+
 
     def _process_request(self, request: "WorkRequest") -> "WorkResponse | None":
         if request.get("cancel"):
             return None
-        self._update_digest(request)
+        self.args = request["arguments"]
+        # self._update_digest(request)
         main(request["arguments"])
-        # TODO: Cache the pickles in-memory.
+        self._store_cache()
         response = {
             "requestId": request.get("requestId", 0),
             "exitCode": 0,
