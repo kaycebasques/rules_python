@@ -107,7 +107,7 @@ class Worker:
             if not path.endswith(".rst"):
                 continue
             srcdir = self.args[0]
-            docname = path.replace(srcdir, "")
+            docname = path.replace(srcdir + "/", "")
             docname = docname.replace(".rst", "")
             digest.append(docname)
         args, unknown = parser.parse_known_args(self.args)
