@@ -103,7 +103,7 @@ def sphinx_docs(
         strip_prefix = "",
         extra_opts = [],
         tools = [],
-        use_cache = False,
+        use_persistent_worker = False,
         **kwargs):
     """Generate docs using Sphinx.
 
@@ -166,7 +166,7 @@ def sphinx_docs(
         source_tree = internal_name + "/_sources",
         extra_opts = extra_opts,
         tools = tools,
-        use_cache = use_cache,
+        use_persistent_worker = use_persistent_worker,
         **kwargs
     )
 
@@ -211,7 +211,7 @@ def _sphinx_docs_impl(ctx):
             source_path = source_dir_path,
             output_prefix = paths.join(ctx.label.name, "_build"),
             inputs = inputs,
-            use_cache = ctx.attr.use_cache,
+            use_persistent_worker = ctx.attr.use_persistent_worker,
         )
         outputs[format] = output_dir
         per_format_args[format] = args_env
@@ -251,7 +251,7 @@ _sphinx_docs = rule(
             cfg = "exec",
             doc = "Additional tools that are used by Sphinx and its plugins.",
         ),
-        "use_cache": attr.bool(
+        "use_persistent_worker": attr.bool(
             doc = "TODO",
             default = False,
         ),
@@ -261,8 +261,7 @@ _sphinx_docs = rule(
     },
 )
 
-def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
-
+def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_worker):
     output_dir = ctx.actions.declare_directory(paths.join(output_prefix, format))
 
     run_args = []  # Copy of the args to forward along to debug runner
@@ -284,7 +283,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
     # Don't add to run_args: parallel building breaks interactive debugging
     args.add("--jobs", "auto")
 
-    if use_cache:
+    if use_persistent_worker:
         args.add("--doctree-dir", paths.join(output_dir.path, ".doctrees"))
     else:
         args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
@@ -302,7 +301,6 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
     for define in extra_defines:
         run_args.extend(("--define", define))
 
-
     env = dict([
         v.split("=", 1)
         for v in ctx.attr._extra_env_flag[_FlagInfo].value
@@ -312,7 +310,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
     for tool in ctx.attr.tools:
         tools.append(tool[DefaultInfo].files_to_run)
 
-    if use_cache:
+    if use_persistent_worker:
         worker_arg_file = ctx.actions.declare_file(ctx.attr.name + ".worker_args")
         ctx.actions.write(
             output = worker_arg_file,
@@ -320,7 +318,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
         )
         all_inputs = depset(
             direct = [worker_arg_file],
-            transitive = [inputs]
+            transitive = [inputs],
         )
         ctx.actions.run(
             executable = ctx.executable.sphinx,
@@ -333,8 +331,8 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_cache):
             env = env,
             execution_requirements = {
                 "supports-workers": "1",
-                "requires-worker-protocol": "json"
-            }
+                "requires-worker-protocol": "json",
+            },
         )
     else:
         ctx.actions.run(
