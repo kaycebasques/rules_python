@@ -310,41 +310,24 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_
     for tool in ctx.attr.tools:
         tools.append(tool[DefaultInfo].files_to_run)
 
+    execution_requirements = {}
     if use_persistent_worker:
-        worker_arg_file = ctx.actions.declare_file(ctx.attr.name + ".worker_args")
-        ctx.actions.write(
-            output = worker_arg_file,
-            content = args,
-        )
-        all_inputs = depset(
-            direct = [worker_arg_file],
-            transitive = [inputs],
-        )
-        ctx.actions.run(
-            executable = ctx.executable.sphinx,
-            arguments = ["@" + worker_arg_file.path],
-            inputs = all_inputs,
-            outputs = [output_dir],
-            tools = tools,
-            mnemonic = "SphinxBuildDocsCache",
-            progress_message = "Sphinx building {} for %{{label}}".format(format),
-            env = env,
-            execution_requirements = {
-                "supports-workers": "1",
-                "requires-worker-protocol": "json",
-            },
-        )
-    else:
-        ctx.actions.run(
-            executable = ctx.executable.sphinx,
-            arguments = [args],
-            inputs = inputs,
-            outputs = [output_dir],
-            tools = tools,
-            mnemonic = "SphinxBuildDocsNoCache",
-            progress_message = "Sphinx building {} for %{{label}}".format(format),
-            env = env,
-        )
+        args.use_param_file("@%s", use_always = True)
+        args.set_param_file_format("multiline")
+        execution_requirements["supports-workers"] = "1"
+        execution_requirements["requires-worker-protocol"] = "json"
+
+    ctx.actions.run(
+        executable = ctx.executable.sphinx,
+        arguments = [args],
+        inputs = inputs,
+        outputs = [output_dir],
+        tools = tools,
+        mnemonic = "SphinxBuildDocs",
+        progress_message = "Sphinx building {} for %{{label}}".format(format),
+        env = env,
+        execution_requirements = execution_requirements,
+    )
     return output_dir, struct(args = run_args, env = env)
 
 def _sphinx_source_tree_impl(ctx):
