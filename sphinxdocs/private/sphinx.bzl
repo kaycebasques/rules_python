@@ -272,19 +272,22 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_
 
     args.add("--show-traceback")  # Full tracebacks on error
     run_args.append("--show-traceback")
-    args.add("--builder", format)
-    run_args.extend(("--builder", format))
+    args.add(format, format = "--builder=%s")
+    run_args.append("--builder={}".format(format))
 
-    if ctx.attr._quiet_flag[BuildSettingInfo].value:
-        # Not added to run_args because run_args is for debugging
-        args.add("--quiet")  # Suppress stdout informational text
+    ##if ctx.attr._quiet_flag[BuildSettingInfo].value:
+    ##    # Not added to run_args because run_args is for debugging
+    ##    args.add("--quiet")  # Suppress stdout informational text
 
     # Build in parallel, if possible
     # Don't add to run_args: parallel building breaks interactive debugging
-    args.add("--jobs", "auto")
+    args.add("--jobs=auto")
 
     if use_persistent_workers:
-        args.add("--doctree-dir", paths.join(output_dir.path, ".doctrees"))
+        # Sphinx normally uses `.doctrees`, but we use underscore so it isn't
+        # hidden by default
+        args.add(paths.join(output_dir.path + "_doctrees"), format = "--doctree-dir=%s")
+
     else:
         args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
         run_args.append("--fresh-env")
@@ -312,6 +315,9 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_
 
     execution_requirements = {}
     if use_persistent_workers:
+        args.add("-v")
+        args.add("-v")
+        args.add("-v")
         args.use_param_file("@%s", use_always = True)
         args.set_param_file_format("multiline")
         execution_requirements["supports-workers"] = "1"

@@ -23,17 +23,27 @@ parser = argparse.ArgumentParser(
 # parser.add_argument('srcdir')
 # parser.add_argument('outdir')
 parser.add_argument("--persistent_worker", action="store_true")
-parser.add_argument("--doctree-dir")
+##parser.add_argument("--doctree-dir")
 
+logger = logging.getLogger('sphinxdocs-build')
 
 class Worker:
 
     def __init__(self, instream: "typing.TextIO", outstream: "typing.TextIO"):
         self._instream = instream
         self._outstream = outstream
-        self._logger = logging.getLogger("worker")
-        logging.basicConfig(filename='echo.log', encoding='utf-8', level=logging.DEBUG)
-        self._logger.info("starting worker")
+        # Annoying. Sphinx resets its loging config as part of main()
+        # and the Sphinx() app setup/invocation. So any logging we try
+        # to setup here to get info out of sphinx is meaningless.
+        # -v -v -v will output more logging, but to stderr/stdout, and thus
+        # bazel's worker log file, due to sphinx's logging re-configuration.
+        # one-liner to get most recent worker log:
+        # find $workerLogDir -type f -printf '%T@ %p\n' | sort -n | tail -1 | awk '{print $2}'
+        logging.basicConfig(
+            ##filename='/tmp/sphinx-builder.log', encoding='utf-8',
+            level=logging.DEBUG
+        )
+        logger.info("starting worker")
         self._current = {}
         self._previous = {}
         self._cache = {}
@@ -45,13 +55,14 @@ class Worker:
                 try:
                     request = self._get_next_request()
                     if request is None:
-                        self._logger.info("Empty request: exiting")
+                        logger.info("Empty request: exiting")
                         break
                     response = self._process_request(request)
+                    logger.info("response:%s", response)
                     if response:
                         self._send_response(response)
                 except Exception:
-                    self._logger.exception("Unhandled error: request=%s", request)
+                    logger.exception("Unhandled error: request=%s", request)
                     output = (
                         f"Unhandled error:\nRequest: {request}\n"
                         + traceback.format_exc()
@@ -65,7 +76,7 @@ class Worker:
                         }
                     )
         finally:
-            self._logger.info("Worker shutting down")
+            logger.info("Worker shutting down")
 
     def _get_next_request(self) -> "object | None":
         line = self._instream.readline()
@@ -81,13 +92,14 @@ class Worker:
 
     def _update_digest(self, request):
         args, unknown = parser.parse_known_args(request["arguments"])
-        # Make room for the new build's data. 
+        # Make room for the new build's data.
         self._previous = self._current
         # Rearrange the new data into a dict to make comparisons easier.
         self._current = {}
         for page in request["inputs"]:
             path = page["path"]
             self._current[path] = page["digest"]
+            logger.info("path mtime: %s", pathlib.Path(path).stat().st_mtime)
         # Compare the content hashes to determine what pages have changed.
         changed_paths = []
         for path in self._current:
@@ -104,6 +116,7 @@ class Worker:
         # Normalize the paths into docnames
         digest = []
         for path in changed_paths:
+            logger.info("Changed: %s", path)
             if not path.endswith(".rst"):
                 continue
             srcdir = self.args[0]
@@ -111,13 +124,13 @@ class Worker:
             docname = docname.replace(".rst", "")
             digest.append(docname)
         args, unknown = parser.parse_known_args(self.args)
-        # Save the digest.
-        doctree_dir = Path(args.doctree_dir)
-        # On a fresh build, _restore_cache() does nothing, so this dir won't exist yet.
-        if not doctree_dir.is_dir():
-            doctree_dir.mkdir(parents=True)
-        with open(doctree_dir / Path("digest.json"), "w") as f:
-            json.dump(digest, f, indent=2)
+        ### Save the digest.
+        ##doctree_dir = Path(args.doctree_dir)
+        ### On a fresh build, _restore_cache() does nothing, so this dir won't exist yet.
+        ##if not doctree_dir.is_dir():
+        ##    doctree_dir.mkdir(parents=True)
+        ##with open(doctree_dir / Path("digest.json"), "w") as f:
+        ##    json.dump(digest, f, indent=2)
 
     def _restore_cache(self):
         for filepath in self._cache:
@@ -138,13 +151,20 @@ class Worker:
                     self._cache[str(filepath)] = f.read()
 
     def _process_request(self, request: "WorkRequest") -> "WorkResponse | None":
+        logger.info("request:%s", json.dumps(request, sort_keys=True, indent=2))
         if request.get("cancel"):
             return None
         self.args = request["arguments"]
-        self._restore_cache()
-        self._update_digest(request)
-        main(self.args)
-        self._update_cache()
+        ##self._restore_cache()
+        ##self._update_digest(request)
+        logger.info("main: %s", self.args)
+        orig_stdout = sys.stdout
+        sys.stdout = sys.stderr
+        try:
+            main(self.args)
+        finally:
+            sys.stdout = orig_stdout
+        ##self._update_cache()
         response = {
             "requestId": request.get("requestId", 0),
             "exitCode": 0,
