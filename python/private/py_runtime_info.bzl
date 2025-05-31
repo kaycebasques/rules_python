@@ -17,8 +17,6 @@ load(":util.bzl", "define_bazel_6_provider")
 
 DEFAULT_STUB_SHEBANG = "#!/usr/bin/env python3"
 
-DEFAULT_BOOTSTRAP_TEMPLATE = Label("//python/private:bootstrap_template")
-
 _PYTHON_VERSION_VALUES = ["PY2", "PY3"]
 
 def _optional_int(value):
@@ -68,7 +66,9 @@ def _PyRuntimeInfo_init(
         interpreter_version_info = None,
         stage2_bootstrap_template = None,
         zip_main_template = None,
-        abi_flags = ""):
+        abi_flags = "",
+        site_init_template = None,
+        supports_build_time_venv = True):
     if (interpreter_path and interpreter) or (not interpreter_path and not interpreter):
         fail("exactly one of interpreter or interpreter_path must be specified")
 
@@ -117,14 +117,21 @@ def _PyRuntimeInfo_init(
         "interpreter_version_info": interpreter_version_info_struct_from_dict(interpreter_version_info),
         "pyc_tag": pyc_tag,
         "python_version": python_version,
+        "site_init_template": site_init_template,
         "stage2_bootstrap_template": stage2_bootstrap_template,
         "stub_shebang": stub_shebang,
+        "supports_build_time_venv": supports_build_time_venv,
         "zip_main_template": zip_main_template,
     }
 
 PyRuntimeInfo, _unused_raw_py_runtime_info_ctor = define_bazel_6_provider(
     doc = """Contains information about a Python runtime, as returned by the `py_runtime`
 rule.
+
+:::{warning}
+This is an **unstable public** API. It may change more frequently and has weaker
+compatibility guarantees.
+:::
 
 A Python runtime describes either a *platform runtime* or an *in-build runtime*.
 A platform runtime accesses a system-installed interpreter at a known path,
@@ -139,6 +146,9 @@ the same conventions as the standard CPython interpreter.
 :type: str
 
 The runtime's ABI flags, i.e. `sys.abiflags`.
+
+:::{versionadded} 1.0.0
+:::
 """,
         "bootstrap_template": """
 :type: File
@@ -160,7 +170,8 @@ is expected to behave and the substutitions performed.
   `%target%`, `%workspace_name`, `%coverage_tool%`, `%import_all%`, `%imports%`,
   `%main%`, `%shebang%`
 * `--bootstrap_impl=script` substititions: `%is_zipfile%`, `%python_binary%`,
-  `%target%`, `%workspace_name`, `%shebang%, `%stage2_bootstrap%`
+  `%python_binary_actual%`, `%target%`, `%workspace_name`,
+  `%shebang%`, `%stage2_bootstrap%`
 
 Substitution definitions:
 
@@ -172,6 +183,19 @@ Substitution definitions:
   * An absolute path to a system interpreter (e.g. begins with `/`).
   * A runfiles-relative path to an interpreter (e.g. `somerepo/bin/python3`)
   * A program to search for on PATH, i.e. a word without spaces, e.g. `python3`.
+
+  When `--bootstrap_impl=script` is used, this is always a runfiles-relative
+  path to a venv-based interpreter executable.
+
+* `%python_binary_actual%`: The path to the interpreter that
+  `%python_binary%` invokes. There are three types of paths:
+  * An absolute path to a system interpreter (e.g. begins with `/`).
+  * A runfiles-relative path to an interpreter (e.g. `somerepo/bin/python3`)
+  * A program to search for on PATH, i.e. a word without spaces, e.g. `python3`.
+
+  Only set for zip builds with `--bootstrap_impl=script`; other builds will use
+  an empty string.
+
 * `%workspace_name%`: The name of the workspace the target belongs to.
 * `%is_zipfile%`: The string `1` if this template is prepended to a zipfile to
   create a self-executable zip file. The string `0` otherwise.
@@ -251,6 +275,15 @@ correctly.
 Indicates whether this runtime uses Python major version 2 or 3. Valid values
 are (only) `"PY2"` and `"PY3"`.
 """,
+        "site_init_template": """
+:type: File
+
+The template to use for the binary-specific site-init hook run by the
+interpreter at startup.
+
+:::{versionadded} 1.0.0
+:::
+""",
         "stage2_bootstrap_template": """
 :type: File
 
@@ -281,6 +314,28 @@ The following substitutions are made during template expansion:
 "Shebang" expression prepended to the bootstrapping Python stub
 script used when executing {obj}`py_binary` targets.  Does not
 apply to Windows.
+""",
+        "supports_build_time_venv": """
+:type: bool
+
+True if this toolchain supports the build-time created virtual environment.
+False if not or unknown. If build-time venv creation isn't supported, then binaries may
+fallback to non-venv solutions or creating a venv at runtime.
+
+In order to use the build-time created virtual environment, a toolchain needs
+to meet two criteria:
+1. Specifying the underlying executable (e.g. `/usr/bin/python3`, as reported by
+   `sys._base_executable`) for the venv executable (`$venv/bin/python3`, as reported
+   by `sys.executable`). This typically requires relative symlinking the venv
+   path to the underlying path at build time, or using the `PYTHONEXECUTABLE`
+   environment variable (Python 3.11+) at runtime.
+2. Having the build-time created site-packages directory
+   (`<venv>/lib/python{version}/site-packages`) recognized by the runtime
+   interpreter. This typically requires the Python version to be known at
+   build-time and match at runtime.
+
+:::{versionadded} VERSION_NEXT_FEATURE
+:::
 """,
         "zip_main_template": """
 :type: File

@@ -1,4 +1,4 @@
-load("//python:defs.bzl", "py_test")
+load("//python:py_test.bzl", "py_test")
 
 alias(
     name = "lib",
@@ -10,17 +10,6 @@ py_test(
     size = "small",
     srcs = [
         "arguments_test.py",
-    ],
-    deps = [
-        ":lib",
-    ],
-)
-
-py_test(
-    name = "namespace_pkgs_test",
-    size = "small",
-    srcs = [
-        "namespace_pkgs_test.py",
     ],
     deps = [
         ":lib",

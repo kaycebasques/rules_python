@@ -17,9 +17,36 @@ workspace(name = "rules_python")
 # Everything below this line is used only for developing rules_python. Users
 # should not copy it to their WORKSPACE.
 
-load("//:internal_deps.bzl", "rules_python_internal_deps")
+# Necessary so that Bazel 9 recognizes this as rules_python and doesn't try
+# to load the version Bazel itself uses by default.
+# buildifier: disable=duplicated-name
+local_repository(
+    name = "rules_python",
+    path = ".",
+)
+
+load("//:internal_dev_deps.bzl", "rules_python_internal_deps")
 
 rules_python_internal_deps()
+
+load("@rules_java//java:rules_java_deps.bzl", "rules_java_dependencies")
+
+rules_java_dependencies()
+
+# note that the following line is what is minimally required from protobuf for the java rules
+# consider using the protobuf_deps() public API from @com_google_protobuf//:protobuf_deps.bzl
+load("@com_google_protobuf//bazel/private:proto_bazel_features.bzl", "proto_bazel_features")  # buildifier: disable=bzl-visibility
+
+proto_bazel_features(name = "proto_bazel_features")
+
+# register toolchains
+load("@rules_java//java:repositories.bzl", "rules_java_toolchains")
+
+rules_java_toolchains()
+
+load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+
+protobuf_deps()
 
 load("@rules_jvm_external//:repositories.bzl", "rules_jvm_external_deps")
 
@@ -37,21 +64,21 @@ load("@stardoc_maven//:defs.bzl", stardoc_pinned_maven_install = "pinned_maven_i
 
 stardoc_pinned_maven_install()
 
-load("//:internal_setup.bzl", "rules_python_internal_setup")
+load("//:internal_dev_setup.bzl", "rules_python_internal_setup")
 
 rules_python_internal_setup()
 
-load("@pythons_hub//:versions.bzl", "MINOR_MAPPING", "PYTHON_VERSIONS")
+load("@pythons_hub//:versions.bzl", "PYTHON_VERSIONS")
 load("//python:repositories.bzl", "python_register_multi_toolchains")
 
 python_register_multi_toolchains(
     name = "python",
-    default_version = MINOR_MAPPING.values()[-3],  # Use 3.11.10
+    default_version = "3.11",
     # Integration tests verify each version, so register all of them.
     python_versions = PYTHON_VERSIONS,
 )
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 # Used for Bazel CI
 http_archive(
@@ -80,18 +107,18 @@ local_repository(
 # which we need to fetch in order to compile it.
 load("@rules_python_gazelle_plugin//:deps.bzl", _py_gazelle_deps = "gazelle_deps")
 
-# See: https://github.com/bazelbuild/rules_python/blob/main/gazelle/README.md
+# See: https://github.com/bazel-contrib/rules_python/blob/main/gazelle/README.md
 # This rule loads and compiles various go dependencies that running gazelle
 # for python requirements.
 _py_gazelle_deps()
 
 # This interpreter is used for various rules_python dev-time tools
-load("@python//3.11.9:defs.bzl", "interpreter")
+interpreter = "@python_3_11_9_host//:python"
 
 #####################
 # Install twine for our own runfiles wheel publishing.
 # Eventually we might want to install twine automatically for users too, see:
-# https://github.com/bazelbuild/rules_python/issues/1016.
+# https://github.com/bazel-contrib/rules_python/issues/1016.
 load("@rules_python//python:pip.bzl", "pip_parse")
 
 pip_parse(
@@ -128,20 +155,3 @@ pip_parse(
 load("@dev_pip//:requirements.bzl", docs_install_deps = "install_deps")
 
 docs_install_deps()
-
-# This wheel is purely here to validate the wheel extraction code. It's not
-# intended for anything else.
-http_file(
-    name = "wheel_for_testing",
-    downloaded_file_path = "numpy-1.25.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
-    sha256 = "0d60fbae8e0019865fc4784745814cff1c421df5afee233db6d88ab4f14655a2",
-    urls = [
-        "https://files.pythonhosted.org/packages/50/67/3e966d99a07d60a21a21d7ec016e9e4c2642a86fea251ec68677daf71d4d/numpy-1.25.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
-    ],
-)
-
-# rules_proto expects //external:python_headers to point at the python headers.
-bind(
-    name = "python_headers",
-    actual = "//python/cc:current_py_cc_headers",
-)

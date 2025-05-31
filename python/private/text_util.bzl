@@ -108,6 +108,10 @@ def _render_list(items, *, hanging_indent = ""):
 def _render_str(value):
     return repr(value)
 
+def _render_string_list_dict(value):
+    """Render an attr.string_list_dict value (`dict[str, list[str]`)"""
+    return _render_dict(value, value_repr = _render_list)
+
 def _render_tuple(items, *, value_repr = repr):
     if not items:
         return "tuple()"
@@ -123,6 +127,21 @@ def _render_tuple(items, *, value_repr = repr):
         ])),
         ")",
     ])
+
+def _render_kwargs(items, *, value_repr = repr):
+    if not items:
+        return ""
+
+    return "\n".join([
+        "{} = {},".format(k, value_repr(v)).lstrip()
+        for k, v in items.items()
+    ])
+
+def _render_call(fn_name, **kwargs):
+    if not kwargs:
+        return fn_name + "()"
+
+    return "{}(\n{}\n)".format(fn_name, _indent(_render_kwargs(kwargs, value_repr = lambda x: x)))
 
 def _toolchain_prefix(index, name, pad_length):
     """Prefixes the given name with the index, padded with zeros to ensure lexicographic sorting.
@@ -141,12 +160,15 @@ def _left_pad_zero(index, length):
 render = struct(
     alias = _render_alias,
     dict = _render_dict,
+    call = _render_call,
     hanging_indent = _hanging_indent,
     indent = _indent,
+    kwargs = _render_kwargs,
     left_pad_zero = _left_pad_zero,
     list = _render_list,
     select = _render_select,
     str = _render_str,
     toolchain_prefix = _toolchain_prefix,
     tuple = _render_tuple,
+    string_list_dict = _render_string_list_dict,
 )

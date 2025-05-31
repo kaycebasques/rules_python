@@ -197,7 +197,7 @@ class _MySTRenderer:
             # Ensure a newline between the directive and the doc fields,
             # otherwise they get parsed as directive options instead.
             if not doc_string and tag.attribute:
-                self.write("\n")
+                self._write("\n")
             self._render_attributes(tag.attribute)
             self._write(":::::\n")
         self._write("::::::\n")
@@ -216,7 +216,9 @@ class _MySTRenderer:
             self._render_attributes(repo_rule.attribute)
         if repo_rule.environ:
             self._write(":envvars: ", ", ".join(sorted(repo_rule.environ)))
-        self._write("\n")
+        self._write("\n\n")
+
+        self._write("::::::\n")
 
     def _render_rule(self, rule: stardoc_output_pb2.RuleInfo):
         rule_name = rule.rule_name

@@ -16,26 +16,29 @@
 
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@pythons_hub//:interpreters.bzl", "INTERPRETER_LABELS")
+load("@pythons_hub//:versions.bzl", "MINOR_MAPPING")
+load("@rules_python_internal//:rules_python_config.bzl", rp_config = "config")
 load("//python/private:auth.bzl", "AUTH_ATTRS")
+load("//python/private:full_version.bzl", "full_version")
 load("//python/private:normalize_name.bzl", "normalize_name")
 load("//python/private:repo_utils.bzl", "repo_utils")
-load("//python/private:semver.bzl", "semver")
+load("//python/private:version.bzl", "version")
 load("//python/private:version_label.bzl", "version_label")
 load(":attrs.bzl", "use_isolated")
-load(":evaluate_markers.bzl", "evaluate_markers", EVALUATE_MARKERS_SRCS = "SRCS")
-load(":hub_repository.bzl", "hub_repository")
-load(":parse_requirements.bzl", "host_platform", "parse_requirements", "select_requirement")
+load(":evaluate_markers.bzl", "evaluate_markers_py", EVALUATE_MARKERS_SRCS = "SRCS")
+load(":hub_repository.bzl", "hub_repository", "whl_config_settings_to_json")
+load(":parse_requirements.bzl", "parse_requirements")
 load(":parse_whl_name.bzl", "parse_whl_name")
 load(":pip_repository_attrs.bzl", "ATTRS")
-load(":render_pkg_aliases.bzl", "whl_alias")
 load(":requirements_files_by_platform.bzl", "requirements_files_by_platform")
 load(":simpleapi_download.bzl", "simpleapi_download")
+load(":whl_config_setting.bzl", "whl_config_setting")
 load(":whl_library.bzl", "whl_library")
 load(":whl_repo_name.bzl", "pypi_repo_name", "whl_repo_name")
 
-def _major_minor_version(version):
-    version = semver(version)
-    return "{}.{}".format(version.major, version.minor)
+def _major_minor_version(version_str):
+    ver = version.parse(version_str)
+    return "{}.{}".format(ver.release[0], ver.release[1])
 
 def _whl_mods_impl(whl_mods_dict):
     """Implementation of the pip.whl_mods tag class.
@@ -67,43 +70,43 @@ def _create_whl_repos(
         *,
         pip_attr,
         whl_overrides,
-        simpleapi_cache,
         available_interpreters = INTERPRETER_LABELS,
-        simpleapi_download = simpleapi_download):
+        minor_mapping = MINOR_MAPPING,
+        evaluate_markers = evaluate_markers_py,
+        get_index_urls = None,
+        enable_pipstar = False):
     """create all of the whl repositories
 
     Args:
         module_ctx: {type}`module_ctx`.
         pip_attr: {type}`struct` - the struct that comes from the tag class iteration.
         whl_overrides: {type}`dict[str, struct]` - per-wheel overrides.
-        simpleapi_cache: {type}`dict` - an opaque dictionary used for caching the results from calling
-            SimpleAPI evaluating all of the tag class invocations {bzl:obj}`pip.parse`.
-        simpleapi_download: Used for testing overrides
+        get_index_urls: A function used to get the index URLs
         available_interpreters: {type}`dict[str, Label]` The dictionary of available
             interpreters that have been registered using the `python` bzlmod extension.
             The keys are in the form `python_{snake_case_version}_host`. This is to be
             used during the `repository_rule` and must be always compatible with the host.
+        minor_mapping: {type}`dict[str, str]` The dictionary needed to resolve the full
+            python version used to parse package METADATA files.
+        evaluate_markers: the function used to evaluate the markers.
+        enable_pipstar: enable the pipstar feature.
 
     Returns a {type}`struct` with the following attributes:
         whl_map: {type}`dict[str, list[struct]]` the output is keyed by the
             normalized package name and the values are the instances of the
-            {bzl:obj}`whl_alias` return values.
+            {bzl:obj}`whl_config_setting` return values.
         exposed_packages: {type}`dict[str, Any]` this is just a way to
             represent a set of string values.
         whl_libraries: {type}`dict[str, dict[str, Any]]` the keys are the
             aparent repository names for the hub repo and the values are the
             arguments that will be passed to {bzl:obj}`whl_library` repository
             rule.
-        is_reproducible: {type}`bool` set to True if does not make calls to the
-            internet to evaluate the requirements files.
     """
     logger = repo_utils.logger(module_ctx, "pypi:create_whl_repos")
     python_interpreter_target = pip_attr.python_interpreter_target
-    is_reproducible = True
 
     # containers to aggregate outputs from this function
     whl_map = {}
-    exposed_packages = {}
     extra_aliases = {
         whl_name: {alias: True for alias in aliases}
         for whl_name, aliases in pip_attr.extra_hub_aliases.items()
@@ -157,26 +160,6 @@ def _create_whl_repos(
         whl_group_mapping = {}
         requirement_cycles = {}
 
-    # Create a new wheel library for each of the different whls
-
-    get_index_urls = None
-    if pip_attr.experimental_index_url:
-        get_index_urls = lambda ctx, distributions: simpleapi_download(
-            ctx,
-            attr = struct(
-                index_url = pip_attr.experimental_index_url,
-                extra_index_urls = pip_attr.experimental_extra_index_urls or [],
-                index_url_overrides = pip_attr.experimental_index_url_overrides or {},
-                sources = distributions,
-                envsubst = pip_attr.envsubst,
-                # Auth related info
-                netrc = pip_attr.netrc,
-                auth_patterns = pip_attr.auth_patterns,
-            ),
-            cache = simpleapi_cache,
-            parallel_download = pip_attr.parallel_download,
-        )
-
     requirements_by_platform = parse_requirements(
         module_ctx,
         requirements_by_platform = requirements_files_by_platform(
@@ -186,7 +169,10 @@ def _create_whl_repos(
             requirements_osx = pip_attr.requirements_darwin,
             requirements_windows = pip_attr.requirements_windows,
             extra_pip_args = pip_attr.extra_pip_args,
-            python_version = major_minor,
+            python_version = full_version(
+                version = pip_attr.python_version,
+                minor_mapping = minor_mapping,
+            ),
             logger = logger,
         ),
         extra_pip_args = pip_attr.extra_pip_args,
@@ -216,27 +202,27 @@ def _create_whl_repos(
         logger = logger,
     )
 
-    repository_platform = host_platform(module_ctx)
-    for whl_name, requirements in requirements_by_platform.items():
-        whl_name = normalize_name(whl_name)
+    exposed_packages = {}
+    for whl in requirements_by_platform:
+        if whl.is_exposed:
+            exposed_packages[whl.name] = None
 
-        group_name = whl_group_mapping.get(whl_name)
+        group_name = whl_group_mapping.get(whl.name)
         group_deps = requirement_cycles.get(group_name, [])
 
         # Construct args separately so that the lock file can be smaller and does not include unused
         # attrs.
         whl_library_args = dict(
-            repo = pip_name,
             dep_template = "@{}//{{name}}:{{target}}".format(hub_name),
         )
         maybe_args = dict(
             # The following values are safe to omit if they have false like values
-            annotation = whl_modifications.get(whl_name),
+            add_libdir_to_library_search_path = pip_attr.add_libdir_to_library_search_path,
+            annotation = whl_modifications.get(whl.name),
             download_only = pip_attr.download_only,
             enable_implicit_namespace_pkgs = pip_attr.enable_implicit_namespace_pkgs,
             environment = pip_attr.environment,
             envsubst = pip_attr.envsubst,
-            experimental_target_platforms = pip_attr.experimental_target_platforms,
             group_deps = group_deps,
             group_name = group_name,
             pip_data_exclude = pip_attr.pip_data_exclude,
@@ -244,9 +230,12 @@ def _create_whl_repos(
             python_interpreter_target = python_interpreter_target,
             whl_patches = {
                 p: json.encode(args)
-                for p, args in whl_overrides.get(whl_name, {}).items()
+                for p, args in whl_overrides.get(whl.name, {}).items()
             },
         )
+        if not enable_pipstar:
+            maybe_args["experimental_target_platforms"] = pip_attr.experimental_target_platforms
+
         whl_library_args.update({k: v for k, v in maybe_args.items() if v})
         maybe_args_with_default = dict(
             # The following values have defaults next to them
@@ -260,142 +249,109 @@ def _create_whl_repos(
             if v != default
         })
 
-        is_exposed = False
-        if get_index_urls:
-            # TODO @aignas 2024-05-26: move to a separate function
-            found_something = False
-            for requirement in requirements:
-                is_exposed = is_exposed or requirement.is_exposed
-                dists = requirement.whls
-                if not pip_attr.download_only and requirement.sdist:
-                    dists = dists + [requirement.sdist]
-
-                for distribution in dists:
-                    found_something = True
-                    is_reproducible = False
-
-                    args = dict(whl_library_args)
-                    if pip_attr.netrc:
-                        args["netrc"] = pip_attr.netrc
-                    if pip_attr.auth_patterns:
-                        args["auth_patterns"] = pip_attr.auth_patterns
-
-                    if not distribution.filename.endswith(".whl"):
-                        # pip is not used to download wheels and the python
-                        # `whl_library` helpers are only extracting things, however
-                        # for sdists, they will be built by `pip`, so we still
-                        # need to pass the extra args there.
-                        args["extra_pip_args"] = requirement.extra_pip_args
-
-                    # This is no-op because pip is not used to download the wheel.
-                    args.pop("download_only", None)
-
-                    repo_name = whl_repo_name(pip_name, distribution.filename, distribution.sha256)
-                    args["requirement"] = requirement.srcs.requirement
-                    args["urls"] = [distribution.url]
-                    args["sha256"] = distribution.sha256
-                    args["filename"] = distribution.filename
-                    args["experimental_target_platforms"] = requirement.target_platforms
-
-                    # Pure python wheels or sdists may need to have a platform here
-                    target_platforms = None
-                    if distribution.filename.endswith("-any.whl") or not distribution.filename.endswith(".whl"):
-                        if len(requirements) > 1:
-                            target_platforms = requirement.target_platforms
-
-                    whl_libraries[repo_name] = args
-
-                    whl_map.setdefault(whl_name, []).append(
-                        whl_alias(
-                            repo = repo_name,
-                            version = major_minor,
-                            filename = distribution.filename,
-                            target_platforms = target_platforms,
-                        ),
-                    )
-
-            if found_something:
-                if is_exposed:
-                    exposed_packages[whl_name] = None
-                continue
-
-        if not pip_attr.parse_all_requirements_files:
-            requirement = select_requirement(
-                requirements,
-                platform = None if pip_attr.download_only else repository_platform,
-            )
-            if not requirement:
-                # Sometimes the package is not present for host platform if there
-                # are whls specified only in particular requirements files, in that
-                # case just continue, however, if the download_only flag is set up,
-                # then the user can also specify the target platform of the wheel
-                # packages they want to download, in that case there will be always
-                # a requirement here, so we will not be in this code branch.
-                continue
-            elif get_index_urls:
-                logger.warn(lambda: "falling back to pip for installing the right file for {}".format(requirement.requirement_line))
-
-            whl_library_args["requirement"] = requirement.requirement_line
-            if requirement.extra_pip_args:
-                whl_library_args["extra_pip_args"] = requirement.extra_pip_args
-
-            # We sort so that the lock-file remains the same no matter the order of how the
-            # args are manipulated in the code going before.
-            repo_name = "{}_{}".format(pip_name, whl_name)
-            whl_libraries[repo_name] = dict(whl_library_args.items())
-            whl_map.setdefault(whl_name, []).append(
-                whl_alias(
-                    repo = repo_name,
-                    version = major_minor,
-                ),
-            )
-            continue
-
-        is_exposed = False
-        for requirement in requirements:
-            is_exposed = is_exposed or requirement.is_exposed
-            if get_index_urls:
-                logger.warn(lambda: "falling back to pip for installing the right file for {}".format(requirement.requirement_line))
-
-            args = dict(whl_library_args)  # make a copy
-            args["requirement"] = requirement.requirement_line
-            if requirement.extra_pip_args:
-                args["extra_pip_args"] = requirement.extra_pip_args
-
-            if pip_attr.download_only:
-                args.setdefault("experimental_target_platforms", requirement.target_platforms)
-
-            target_platforms = requirement.target_platforms if len(requirements) > 1 else []
-            repo_name = pypi_repo_name(
-                pip_name,
-                whl_name,
-                *target_platforms
-            )
-            whl_libraries[repo_name] = args
-            whl_map.setdefault(whl_name, []).append(
-                whl_alias(
-                    repo = repo_name,
-                    version = major_minor,
-                    target_platforms = target_platforms or None,
-                ),
+        for src in whl.srcs:
+            repo = _whl_repo(
+                src = src,
+                whl_library_args = whl_library_args,
+                download_only = pip_attr.download_only,
+                netrc = pip_attr.netrc,
+                auth_patterns = pip_attr.auth_patterns,
+                python_version = major_minor,
+                is_multiple_versions = whl.is_multiple_versions,
+                enable_pipstar = enable_pipstar,
             )
 
-        if is_exposed:
-            exposed_packages[whl_name] = None
+            repo_name = "{}_{}".format(pip_name, repo.repo_name)
+            if repo_name in whl_libraries:
+                fail("Attempting to creating a duplicate library {} for {}".format(
+                    repo_name,
+                    whl.name,
+                ))
+
+            whl_libraries[repo_name] = repo.args
+            whl_map.setdefault(whl.name, {})[repo.config_setting] = repo_name
 
     return struct(
-        is_reproducible = is_reproducible,
         whl_map = whl_map,
         exposed_packages = exposed_packages,
         extra_aliases = extra_aliases,
         whl_libraries = whl_libraries,
     )
 
-def parse_modules(module_ctx, _fail = fail, **kwargs):
+def _whl_repo(*, src, whl_library_args, is_multiple_versions, download_only, netrc, auth_patterns, python_version, enable_pipstar = False):
+    args = dict(whl_library_args)
+    args["requirement"] = src.requirement_line
+    is_whl = src.filename.endswith(".whl")
+
+    if src.extra_pip_args and not is_whl:
+        # pip is not used to download wheels and the python
+        # `whl_library` helpers are only extracting things, however
+        # for sdists, they will be built by `pip`, so we still
+        # need to pass the extra args there, so only pop this for whls
+        args["extra_pip_args"] = src.extra_pip_args
+
+    if not src.url or (not is_whl and download_only):
+        # Fallback to a pip-installed wheel
+        target_platforms = src.target_platforms if is_multiple_versions else []
+        return struct(
+            repo_name = pypi_repo_name(
+                normalize_name(src.distribution),
+                *target_platforms
+            ),
+            args = args,
+            config_setting = whl_config_setting(
+                version = python_version,
+                target_platforms = target_platforms or None,
+            ),
+        )
+
+    # This is no-op because pip is not used to download the wheel.
+    args.pop("download_only", None)
+
+    if netrc:
+        args["netrc"] = netrc
+    if auth_patterns:
+        args["auth_patterns"] = auth_patterns
+
+    args["urls"] = [src.url]
+    args["sha256"] = src.sha256
+    args["filename"] = src.filename
+    if not enable_pipstar:
+        args["experimental_target_platforms"] = [
+            # Get rid of the version fot the target platforms because we are
+            # passing the interpreter any way. Ideally we should search of ways
+            # how to pass the target platforms through the hub repo.
+            p.partition("_")[2]
+            for p in src.target_platforms
+        ]
+
+    # Pure python wheels or sdists may need to have a platform here
+    target_platforms = None
+    if is_whl and not src.filename.endswith("-any.whl"):
+        pass
+    elif is_multiple_versions:
+        target_platforms = src.target_platforms
+
+    return struct(
+        repo_name = whl_repo_name(src.filename, src.sha256),
+        args = args,
+        config_setting = whl_config_setting(
+            version = python_version,
+            filename = src.filename,
+            target_platforms = target_platforms,
+        ),
+    )
+
+def parse_modules(
+        module_ctx,
+        _fail = fail,
+        simpleapi_download = simpleapi_download,
+        **kwargs):
     """Implementation of parsing the tag classes for the extension and return a struct for registering repositories.
 
     Args:
         module_ctx: {type}`module_ctx` module context.
+        simpleapi_download: Used for testing overrides
         _fail: {type}`function` the failure function, mainly for testing.
         **kwargs: Extra arguments passed to the layers below.
 
@@ -438,7 +394,9 @@ You cannot use both the additive_build_content and additive_build_content_file a
     for module in module_ctx.modules:
         for attr in module.tags.override:
             if not module.is_root:
-                fail("overrides are only supported in root modules")
+                # Overrides are only supported in root modules. Silently
+                # ignore the override:
+                continue
 
             if not attr.file.endswith(".whl"):
                 fail("Only whl overrides are supported at this time")
@@ -475,8 +433,6 @@ You cannot use both the additive_build_content and additive_build_content_file a
     extra_aliases = {}
     whl_libraries = {}
 
-    is_reproducible = True
-
     for mod in module_ctx.modules:
         for pip_attr in mod.tags.parse:
             hub_name = pip_attr.hub_name
@@ -512,22 +468,52 @@ You cannot use both the additive_build_content and additive_build_content_file a
             else:
                 pip_hub_map[pip_attr.hub_name].python_versions.append(pip_attr.python_version)
 
+            get_index_urls = None
+            if pip_attr.experimental_index_url:
+                skip_sources = [
+                    normalize_name(s)
+                    for s in pip_attr.simpleapi_skip
+                ]
+                get_index_urls = lambda ctx, distributions: simpleapi_download(
+                    ctx,
+                    attr = struct(
+                        index_url = pip_attr.experimental_index_url,
+                        extra_index_urls = pip_attr.experimental_extra_index_urls or [],
+                        index_url_overrides = pip_attr.experimental_index_url_overrides or {},
+                        sources = [
+                            d
+                            for d in distributions
+                            if normalize_name(d) not in skip_sources
+                        ],
+                        envsubst = pip_attr.envsubst,
+                        # Auth related info
+                        netrc = pip_attr.netrc,
+                        auth_patterns = pip_attr.auth_patterns,
+                    ),
+                    cache = simpleapi_cache,
+                    parallel_download = pip_attr.parallel_download,
+                )
+            elif pip_attr.experimental_extra_index_urls:
+                fail("'experimental_extra_index_urls' is a no-op unless 'experimental_index_url' is set")
+            elif pip_attr.experimental_index_url_overrides:
+                fail("'experimental_index_url_overrides' is a no-op unless 'experimental_index_url' is set")
+
             out = _create_whl_repos(
                 module_ctx,
                 pip_attr = pip_attr,
-                simpleapi_cache = simpleapi_cache,
+                get_index_urls = get_index_urls,
                 whl_overrides = whl_overrides,
                 **kwargs
             )
             hub_whl_map.setdefault(hub_name, {})
             for key, settings in out.whl_map.items():
-                hub_whl_map[hub_name].setdefault(key, []).extend(settings)
+                for setting, repo in settings.items():
+                    hub_whl_map[hub_name].setdefault(key, {}).setdefault(repo, []).append(setting)
             extra_aliases.setdefault(hub_name, {})
             for whl_name, aliases in out.extra_aliases.items():
                 extra_aliases[hub_name].setdefault(whl_name, {}).update(aliases)
             exposed_packages.setdefault(hub_name, {}).update(out.exposed_packages)
             whl_libraries.update(out.whl_libraries)
-            is_reproducible = is_reproducible and out.is_reproducible
 
             # TODO @aignas 2024-04-05: how do we support different requirement
             # cycles for different abis/oses? For now we will need the users to
@@ -541,7 +527,7 @@ You cannot use both the additive_build_content and additive_build_content_file a
         whl_mods = dict(sorted(whl_mods.items())),
         hub_whl_map = {
             hub_name: {
-                whl_name: sorted(settings, key = lambda x: (x.version, x.filename))
+                whl_name: dict(settings)
                 for whl_name, settings in sorted(whl_map.items())
             }
             for hub_name, whl_map in sorted(hub_whl_map.items())
@@ -568,22 +554,7 @@ You cannot use both the additive_build_content and additive_build_content_file a
             k: dict(sorted(args.items()))
             for k, args in sorted(whl_libraries.items())
         },
-        is_reproducible = is_reproducible,
     )
-
-def _alias_dict(a):
-    ret = {
-        "repo": a.repo,
-    }
-    if a.config_setting:
-        ret["config_setting"] = a.config_setting
-    if a.filename:
-        ret["filename"] = a.filename
-    if a.target_platforms:
-        ret["target_platforms"] = a.target_platforms
-    if a.version:
-        ret["version"] = a.version
-    return ret
 
 def _pip_impl(module_ctx):
     """Implementation of a class tag that creates the pip hub and corresponding pip spoke whl repositories.
@@ -651,7 +622,7 @@ def _pip_impl(module_ctx):
         module_ctx: module contents
     """
 
-    mods = parse_modules(module_ctx)
+    mods = parse_modules(module_ctx, enable_pipstar = rp_config.enable_pipstar)
 
     # Build all of the wheel modifications if the tag class is called.
     _whl_mods_impl(mods.whl_mods)
@@ -665,30 +636,20 @@ def _pip_impl(module_ctx):
             repo_name = hub_name,
             extra_hub_aliases = mods.extra_aliases.get(hub_name, {}),
             whl_map = {
-                key: json.encode([_alias_dict(a) for a in aliases])
-                for key, aliases in whl_map.items()
+                key: whl_config_settings_to_json(values)
+                for key, values in whl_map.items()
             },
             packages = mods.exposed_packages.get(hub_name, []),
             groups = mods.hub_group_map.get(hub_name),
         )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:
-        # If we are not using the `experimental_index_url feature, the extension is fully
-        # deterministic and we don't need to create a lock entry for it.
-        #
-        # In order to be able to dogfood the `experimental_index_url` feature before it gets
-        # stabilized, we have created the `_pip_non_reproducible` function, that will result
-        # in extra entries in the lock file.
-        return module_ctx.extension_metadata(reproducible = mods.is_reproducible)
+        # NOTE @aignas 2025-04-15: this is set to be reproducible, because the
+        # results after calling the PyPI index should be reproducible on each
+        # machine.
+        return module_ctx.extension_metadata(reproducible = True)
     else:
         return None
-
-def _pip_non_reproducible(module_ctx):
-    _pip_impl(module_ctx)
-
-    # We default to calling the PyPI index and that will go into the
-    # MODULE.bazel.lock file, hence return nothing here.
-    return None
 
 def _pip_parse_ext_attrs(**kwargs):
     """Get the attributes for the pip extension.
@@ -710,6 +671,11 @@ The indexes must support Simple API as described here:
 https://packaging.python.org/en/latest/specifications/simple-repository-api/
 
 This is equivalent to `--extra-index-urls` `pip` option.
+
+:::{versionchanged} 1.1.0
+Starting with this version we will iterate over each index specified until
+we find metadata for all references distributions.
+:::
 """,
             default = [],
         ),
@@ -731,6 +697,11 @@ This is equivalent to `--index-url` `pip` option.
 If {attr}`download_only` is set, then `sdist` archives will be discarded and `pip.parse` will
 operate in wheel-only mode.
 :::
+
+:::{versionchanged} 1.4.0
+Index metadata will be used to deduct `sha256` values for packages even if the
+`sha256` values are not present in the requirements.txt lock file.
+:::
 """,
         ),
         "experimental_index_url_overrides": attr.string_dict(
@@ -749,16 +720,6 @@ https://pytorch.org/blog/compromised-nightly-dependency/.
 The indexes must support Simple API as described here:
 https://packaging.python.org/en/latest/specifications/simple-repository-api/
 """,
-        ),
-        "extra_hub_aliases": attr.string_list_dict(
-            doc = """\
-Extra aliases to make for specific wheels in the hub repo. This is useful when
-paired with the {attr}`whl_modifications`.
-
-:::{versionadded} 0.38.0
-:::
-""",
-            mandatory = False,
         ),
         "hub_name": attr.string(
             mandatory = True,
@@ -799,20 +760,6 @@ find in case extra indexes are specified.
 """,
             default = True,
         ),
-        "parse_all_requirements_files": attr.bool(
-            default = True,
-            doc = """\
-A temporary flag to enable users to make `pip` extension result always
-the same independent of the whether transitive dependencies use {bzl:attr}`experimental_index_url` or not.
-
-This enables users to migrate to a solution that fixes
-[#2268](https://github.com/bazelbuild/rules_python/issues/2268).
-
-::::{deprecated} 0.38.0
-This is a transition flag and will be removed in a subsequent release.
-::::
-""",
-        ),
         "python_version": attr.string(
             mandatory = True,
             doc = """
@@ -822,6 +769,18 @@ The Python version the dependencies are targetting, in Major.Minor format
 If an interpreter isn't explicitly provided (using `python_interpreter` or
 `python_interpreter_target`), then the version specified here must have
 a corresponding `python.toolchain()` configured.
+""",
+        ),
+        "simpleapi_skip": attr.string_list(
+            doc = """\
+The list of packages to skip fetching metadata for from SimpleAPI index. You should
+normally not need this attribute, but in case you do, please report this as a bug
+to `rules_python` and use this attribute until the bug is fixed.
+
+EXPERIMENTAL: this may be removed without notice.
+
+:::{versionadded} 1.4.0
+:::
 """,
         ),
         "whl_modifications": attr.label_keyed_string_dict(
@@ -953,53 +912,6 @@ the BUILD files for wheels.
             attrs = _pip_parse_ext_attrs(),
             doc = """\
 This tag class is used to create a pip hub and all of the spokes that are part of that hub.
-This tag class reuses most of the attributes found in {bzl:obj}`pip_parse`.
-The exception is it does not use the arg 'repo_prefix'.  We set the repository
-prefix for the user and the alias arg is always True in bzlmod.
-""",
-        ),
-        "whl_mods": tag_class(
-            attrs = _whl_mod_attrs(),
-            doc = """\
-This tag class is used to create JSON file that are used when calling wheel_builder.py.  These
-JSON files contain instructions on how to modify a wheel's project.  Each of the attributes
-create different modifications based on the type of attribute. Previously to bzlmod these
-JSON files where referred to as annotations, and were renamed to whl_modifications in this
-extension.
-""",
-        ),
-    },
-)
-
-pypi_internal = module_extension(
-    doc = """\
-This extension is used to make dependencies from pypi available.
-For now this is intended to be used internally so that usage of the `pip`
-extension in `rules_python` does not affect the evaluations of the extension
-for the consumers.
-pip.parse:
-To use, call `pip.parse()` and specify `hub_name` and your requirements file.
-Dependencies will be downloaded and made available in a repo named after the
-`hub_name` argument.
-Each `pip.parse()` call configures a particular Python version. Multiple calls
-can be made to configure different Python versions, and will be grouped by
-the `hub_name` argument. This allows the same logical name, e.g. `@pypi//numpy`
-to automatically resolve to different, Python version-specific, libraries.
-pip.whl_mods:
-This tag class is used to help create JSON files to describe modifications to
-the BUILD files for wheels.
-
-TODO: will be removed before 1.0.
-""",
-    implementation = _pip_non_reproducible,
-    tag_classes = {
-        "override": _override_tag,
-        "parse": tag_class(
-            attrs = _pip_parse_ext_attrs(
-                experimental_index_url = "https://pypi.org/simple",
-            ),
-            doc = """\
-This tag class is used to create a pypi hub and all of the spokes that are part of that hub.
 This tag class reuses most of the attributes found in {bzl:obj}`pip_parse`.
 The exception is it does not use the arg 'repo_prefix'.  We set the repository
 prefix for the user and the alias arg is always True in bzlmod.

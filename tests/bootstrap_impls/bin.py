@@ -22,3 +22,5 @@ print(
 print("PYTHONSAFEPATH:", os.environ.get("PYTHONSAFEPATH", "UNSET") or "EMPTY")
 print("sys.flags.safe_path:", sys.flags.safe_path)
 print("file:", __file__)
+print("sys.executable:", sys.executable)
+print("sys._base_executable:", sys._base_executable)

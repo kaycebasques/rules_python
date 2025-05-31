@@ -3,6 +3,21 @@
 We'd love to accept your patches and contributions to this project. There are
 just a few small guidelines you need to follow.
 
+## Contributor License Agreement
+
+First, the most important step: signing the Contributor License Agreement. We
+cannot look at any of your code unless one is signed.
+
+Contributions to this project must be accompanied by a Contributor License
+Agreement. You (or your employer) retain the copyright to your contribution,
+this simply gives us permission to use and redistribute your contributions as
+part of the project. Head over to <https://cla.developers.google.com/> to see
+your current agreements on file or to sign a new one.
+
+You generally only need to submit a CLA once, so if you've already submitted one
+(even if it was for a different project), you probably don't need to do it
+again.
+
 ## Getting started
 
 Before we can work on the code, we need to get a copy of it and setup some
@@ -15,7 +30,7 @@ the [GitHub `gh` tool](https://github.com/cli/cli)
 (More advanced users may prefer the GitHub UI and raw `git` commands).
 
 ```shell
-gh repo fork bazelbuild/rules_python --clone --remote
+gh repo fork bazel-contrib/rules_python --clone --remote
 ```
 
 Next, make sure you have a new enough version of Python installed that supports the
@@ -50,29 +65,10 @@ git push origin my-feature
 Once the code is in your github repo, you can then turn it into a Pull Request
 to the actual rules_python project and begin the code review process.
 
+## Developer guide
 
-## Running tests
-
-Running tests is particularly easy thanks to Bazel, simply run:
-
-```
-bazel test //...
-```
-
-And it will run all the tests it can find. The first time you do this, it will
-probably take long time because various dependencies will need to be downloaded
-and setup. Subsequent runs will be faster, but there are many tests, and some of
-them are slow. If you're working on a particular area of code, you can run just
-the tests in those directories instead, which can speed up your edit-run cycle.
-
-## Updating tool dependencies
-
-It's suggested to routinely update the tool versions within our repo - some of the
-tools are using requirement files compiled by `uv` and others use other means. In order
-to have everything self-documented, we have a special target -
-`//private:requirements.update`, which uses `rules_multirun` to run in sequence all
-of the requirement updating scripts in one go. This can be done once per release as
-we prepare for releases.
+For more more details, guidance, and tips for working with the code base,
+see [docs/devguide.md](./devguide)
 
 ## Formatting
 
@@ -98,18 +94,6 @@ $ buildifier --lint=fix --warnings=native-py -warnings=all WORKSPACE
 ```
 
 Replace the argument "WORKSPACE" with the file that you are linting.
-
-## Contributor License Agreement
-
-Contributions to this project must be accompanied by a Contributor License
-Agreement. You (or your employer) retain the copyright to your contribution,
-this simply gives us permission to use and redistribute your contributions as
-part of the project. Head over to <https://cla.developers.google.com/> to see
-your current agreements on file or to sign a new one.
-
-You generally only need to submit a CLA once, so if you've already submitted one
-(even if it was for a different project), you probably don't need to do it
-again.
 
 ## Code reviews
 
@@ -137,18 +121,106 @@ If a breaking change is introduced, then `BREAKING CHANGE:` is required; see
 the [Breaking Changes](#breaking-changes) section for how to introduce breaking
 changes.
 
+User visible changes, such as features, fixes, or notable refactors, should
+be documneted in CHANGELOG.md and their respective API doc. See [Documenting
+changes] for how to do so.
+
 Common `type`s:
 
 * `build:` means it affects the building or development workflow.
 * `docs:` means only documentation is being added, updated, or fixed.
-* `feat:` means a user-visible feature is being added.
-* `fix:` means a user-visible behavior is being fixed.
-* `refactor:` means some sort of code cleanup that doesn't change user-visible behavior.
+* `feat:` means a user-visible feature is being added. See [Documenting version
+  changes] for how to documenAdd `{versionadded}`
+  to appropriate docs.
+* `fix:` means a user-visible behavior is being fixed. If the fix is changing
+  behavior of a function, add `{versionchanged}` to appropriate docs, as necessary.
+* `refactor:` means some sort of code cleanup that doesn't change user-visible
+  behavior. Add `{versionchanged}` to appropriate docs, as necessary.
 * `revert:` means a prior change is being reverted in some way.
 * `test:` means only tests are being added.
 
 For the full details of types, see
 [Conventional Commits](https://www.conventionalcommits.org/).
+
+### Documenting changes
+
+Changes are documented in two places: CHANGELOG.md and API docs.
+
+CHANGELOG.md contains a brief, human friendly, description. This text is
+intended for easy skimming so that, when people upgrade, they can quickly get a
+sense of what's relevant to them.
+
+API documentation are the doc strings for functions, fields, attributes, etc.
+When user-visible or notable behavior is added, changed, or removed, the
+`{versionadded}`, `{versionchanged}` or `{versionremoved}` directives should be
+used to note the change. When specifying the version, use the values
+`VERSION_NEXT_FEATURE` or `VERSION_NEXT_PATCH` to indicate what sort of
+version increase the change requires.
+
+These directives use Sphinx MyST syntax, e.g.
+
+```
+:::{versionadded} VERSION_NEXT_FEATURE
+The `allow_new_thing` arg was added.
+:::
+
+:::{versionchanged} VERSION_NEXT_PATCH
+Large numbers no longer consume exponential memory.
+:::
+
+:::{versionremoved} VERSION_NEXT_FEATURE
+The `legacy_foo` arg was removed
+:::
+```
+
+## Style and idioms
+
+For the most part, we just accept whatever the code formatters do, so there
+isn't much style to enforce.
+
+Some miscellanous style, idioms, and conventions we have are:
+
+### Markdown/Sphinx Style
+
+* Use colons for prose sections of text, e.g. `:::{note}`, not backticks.
+* Use backticks for code blocks.
+* Max line length: 100.
+
+### BUILD/bzl Style
+
+* When a macro generates public targets, use a dot (`.`) to separate the
+  user-provided name from the generted name. e.g. `foo(name="x")` generates
+  `x.test`. The `.` is our convention to communicate that it's a generated
+  target, and thus one should look for `name="x"` when searching for the
+  definition.
+* The different build phases shouldn't load code that defines objects that
+  aren't valid for their phase. e.g.
+  * The bzlmod phase shouldn't load code defining regular rules or providers.
+  * The repository phase shouldn't load code defining module extensions, regular
+    rules, or providers.
+  * The loading phase shouldn't load code defining module extensions or
+    repository rules.
+  * Loading utility libraries or generic code is OK, but should strive to load
+    code that is usable for its phase. e.g. loading-phase code shouldn't
+    load utility code that is predominately only usable to the bzlmod phase.
+* Providers should be in their own files. This allows implementing a custom rule
+  that implements the provider without loading a specific implementation.
+* One rule per file is preferred, but not required. The goal is that defining an
+  e.g. library shouldn't incur loading all the code for binaries, tests,
+  packaging, etc; things that may be niche or uncommonly used.
+* Separate files should be used to expose public APIs. This ensures our public
+  API is well defined and prevents accidentally exposing a package-private
+  symbol as a public symbol.
+
+  :::{note}
+  The public API file's docstring becomes part of the user-facing docs. That
+  file's docstring must be used for module-level API documentation.
+  :::
+* Repository rules should have name ending in `_repo`. This helps distinguish
+  them from regular rules.
+* Each bzlmod extension, the "X" of `use_repo("//foo:foo.bzl", "X")` should be
+  in its own file. The path given in the `use_repo()` expression is the identity
+  Bazel uses and cannot be changed.
 
 ## Generated files
 
@@ -159,30 +231,14 @@ merged:
   `compile_pip_requirements` update target, which is usually in the same directory.
   e.g. `bazel run //docs:requirements.update`
 
-## Core rules
+## Binary artifacts
 
-The bulk of this repo is owned and maintained by the Bazel Python community.
-However, since the core Python rules (`py_binary` and friends) are still
-bundled with Bazel itself, the Bazel team retains ownership of their stubs in
-this repository. This will be the case at least until the Python rules are
-fully migrated to Starlark code.
+Checking in binary artifacts is not allowed. This is because they are extremely
+problematic to verify and ensure they're safe
 
-Practically, this means that a Bazel team member should approve any PR
-concerning the core Python logic. This includes everything under the `python/`
-directory except for `pip.bzl` and `requirements.txt`.
+Examples include, but aren't limited to: prebuilt binaries, shared libraries,
+zip files, or wheels.
 
-Issues should be triaged as follows:
-
-- Anything concerning the way Bazel implements the core Python rules should be
-  filed under [bazelbuild/bazel](https://github.com/bazelbuild/bazel), using
-  the label `team-Rules-python`.
-
-- If the issue specifically concerns the rules_python stubs, it should be filed
-  here in this repository and use the label `core-rules`.
-
-- Anything else, such as feature requests not related to existing core rules
-  functionality, should also be filed in this repository but without the
-  `core-rules` label.
 
 (breaking-changes)=
 ## Breaking Changes

@@ -10,14 +10,13 @@ local_path_override(
 )
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
-python.toolchain(
-    configure_coverage_tool = True,
-    python_version = "3.8",
+python.defaults(
+    # The environment variable takes precedence if set.
+    python_version = "3.9",
+    python_version_env = "BAZEL_PYTHON_VERSION",
 )
 python.toolchain(
     configure_coverage_tool = True,
-    # Only set when you have mulitple toolchain versions.
-    is_default = True,
     python_version = "3.9",
 )
 python.toolchain(
@@ -36,11 +35,6 @@ use_repo(
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 use_repo(pip, "pypi")
-pip.parse(
-    hub_name = "pypi",
-    python_version = "3.8",
-    requirements_lock = "//requirements:requirements_lock_3_8.txt",
-)
 pip.parse(
     hub_name = "pypi",
     python_version = "3.9",
@@ -62,4 +56,4 @@ bazel_dep(name = "rules_shell", version = "0.2.0", dev_dependency = True)
 
 # Only needed to make rules_python's CI happy. rules_java 8.3.0+ is needed so
 # that --java_runtime_version=remotejdk_11 works with Bazel 8.
-bazel_dep(name = "rules_java", version = "8.3.0")
+bazel_dep(name = "rules_java", version = "8.3.1")

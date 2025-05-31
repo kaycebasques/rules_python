@@ -76,6 +76,8 @@ class WheelTest(unittest.TestCase):
                 zf.namelist(),
                 [
                     "examples/wheel/lib/module_with_data.py",
+                    "examples/wheel/lib/module_with_type_annotations.py",
+                    "examples/wheel/lib/module_with_type_annotations.pyi",
                     "examples/wheel/lib/simple_module.py",
                     "example_minimal_library-0.0.1.dist-info/WHEEL",
                     "example_minimal_library-0.0.1.dist-info/METADATA",
@@ -83,7 +85,7 @@ class WheelTest(unittest.TestCase):
                 ],
             )
         self.assertFileSha256Equal(
-            filename, "79a4e9c1838c0631d5d8fa49a26efd6e9a364f6b38d9597c0f6df112271a0e28"
+            filename, "ef5afd9f6c3ff569ef7e5b2799d3a2ec9675d029414f341e0abd7254d6b9a25d"
         )
 
     def test_py_package_wheel(self):
@@ -98,6 +100,8 @@ class WheelTest(unittest.TestCase):
                     "examples/wheel/lib/data,with,commas.txt",
                     "examples/wheel/lib/data.txt",
                     "examples/wheel/lib/module_with_data.py",
+                    "examples/wheel/lib/module_with_type_annotations.py",
+                    "examples/wheel/lib/module_with_type_annotations.pyi",
                     "examples/wheel/lib/simple_module.py",
                     "examples/wheel/main.py",
                     "example_minimal_package-0.0.1.dist-info/WHEEL",
@@ -106,7 +110,7 @@ class WheelTest(unittest.TestCase):
                 ],
             )
         self.assertFileSha256Equal(
-            filename, "82370bf61310e2d3c7b1218368457dc7e161bf5dc1a280d7d45102b5e56acf43"
+            filename, "39bec133cf79431e8d057eae550cd91aa9dfbddfedb53d98ebd36e3ade2753d0"
         )
 
     def test_customized_wheel(self):
@@ -121,6 +125,8 @@ class WheelTest(unittest.TestCase):
                     "examples/wheel/lib/data,with,commas.txt",
                     "examples/wheel/lib/data.txt",
                     "examples/wheel/lib/module_with_data.py",
+                    "examples/wheel/lib/module_with_type_annotations.py",
+                    "examples/wheel/lib/module_with_type_annotations.pyi",
                     "examples/wheel/lib/simple_module.py",
                     "examples/wheel/main.py",
                     "example_customized-0.0.1.dist-info/WHEEL",
@@ -138,6 +144,7 @@ class WheelTest(unittest.TestCase):
                 "example_customized-0.0.1.dist-info/entry_points.txt"
             )
 
+            print(record_contents)
             self.assertEqual(
                 record_contents,
                 # The entries are guaranteed to be sorted.
@@ -145,8 +152,10 @@ class WheelTest(unittest.TestCase):
 "examples/wheel/lib/data,with,commas.txt",sha256=9vJKEdfLu8bZRArKLroPZJh1XKkK3qFMXiM79MBL2Sg,12
 examples/wheel/lib/data.txt,sha256=9vJKEdfLu8bZRArKLroPZJh1XKkK3qFMXiM79MBL2Sg,12
 examples/wheel/lib/module_with_data.py,sha256=8s0Khhcqz3yVsBKv2IB5u4l4TMKh7-c_V6p65WVHPms,637
+examples/wheel/lib/module_with_type_annotations.py,sha256=2p_0YFT0TBUufbGCAR_u2vtxF1nM0lf3dX4VGeUtYq0,637
+examples/wheel/lib/module_with_type_annotations.pyi,sha256=fja3ql_WRJ1qO8jyZjWWrTTMcg1J7EpOQivOHY_8vI4,630
 examples/wheel/lib/simple_module.py,sha256=z2hwciab_XPNIBNH8B1Q5fYgnJvQTeYf0ZQJpY8yLLY,637
-examples/wheel/main.py,sha256=sgg5iWN_9inYBjm6_Zw27hYdmo-l24fA-2rfphT-IlY,909
+examples/wheel/main.py,sha256=mFiRfzQEDwCHr-WVNQhOH26M42bw1UMF6IoqvtuDTrw,1047
 example_customized-0.0.1.dist-info/WHEEL,sha256=sobxWSyDDkdg_rinUth-jxhXHqoNqlmNMJY3aTZn2Us,91
 example_customized-0.0.1.dist-info/METADATA,sha256=QYQcDJFQSIqan8eiXqL67bqsUfgEAwf2hoK_Lgi1S-0,559
 example_customized-0.0.1.dist-info/entry_points.txt,sha256=pqzpbQ8MMorrJ3Jp0ntmpZcuvfByyqzMXXi2UujuXD0,137
@@ -197,7 +206,7 @@ first = first.main:f
 second = second.main:s""",
             )
         self.assertFileSha256Equal(
-            filename, "706e8dd45884d8cb26e92869f7d29ab7ed9f683b4e2d08f06c03dbdaa12191b8"
+            filename, "685f68fc6665f53c9b769fd1ba12cce9937ab7f40ef4e60c82ef2de8653935de"
         )
 
     def test_filename_escaping(self):
@@ -211,6 +220,8 @@ second = second.main:s""",
                     "examples/wheel/lib/data,with,commas.txt",
                     "examples/wheel/lib/data.txt",
                     "examples/wheel/lib/module_with_data.py",
+                    "examples/wheel/lib/module_with_type_annotations.py",
+                    "examples/wheel/lib/module_with_type_annotations.pyi",
                     "examples/wheel/lib/simple_module.py",
                     "examples/wheel/main.py",
                     # PEP calls for replacing only in the archive filename.
@@ -248,6 +259,8 @@ UNKNOWN
                     "wheel/lib/data,with,commas.txt",
                     "wheel/lib/data.txt",
                     "wheel/lib/module_with_data.py",
+                    "wheel/lib/module_with_type_annotations.py",
+                    "wheel/lib/module_with_type_annotations.pyi",
                     "wheel/lib/simple_module.py",
                     "wheel/main.py",
                     "examples_custom_package_root-0.0.1.dist-info/WHEEL",
@@ -265,7 +278,7 @@ UNKNOWN
             for line in record_contents.splitlines():
                 self.assertFalse(line.startswith("/"))
         self.assertFileSha256Equal(
-            filename, "568922541703f6edf4b090a8413991f9fa625df2844e644dd30bdbe9deb660be"
+            filename, "2fbfc3baaf6fccca0f97d02316b8344507fe6c8136991a66ee5f162235adb19f"
         )
 
     def test_custom_package_root_multi_prefix_wheel(self):
@@ -281,6 +294,8 @@ UNKNOWN
                     "data,with,commas.txt",
                     "data.txt",
                     "module_with_data.py",
+                    "module_with_type_annotations.py",
+                    "module_with_type_annotations.pyi",
                     "simple_module.py",
                     "main.py",
                     "example_custom_package_root_multi_prefix-0.0.1.dist-info/WHEEL",
@@ -297,7 +312,7 @@ UNKNOWN
             for line in record_contents.splitlines():
                 self.assertFalse(line.startswith("/"))
         self.assertFileSha256Equal(
-            filename, "a8b91ce9d6f570e97b40a357a292a6f595d3470f07c479cb08550257cc9c8306"
+            filename, "3e67971ca1e8a9ba36a143df7532e641f5661c56235e41d818309316c955ba58"
         )
 
     def test_custom_package_root_multi_prefix_reverse_order_wheel(self):
@@ -313,6 +328,8 @@ UNKNOWN
                     "lib/data,with,commas.txt",
                     "lib/data.txt",
                     "lib/module_with_data.py",
+                    "lib/module_with_type_annotations.py",
+                    "lib/module_with_type_annotations.pyi",
                     "lib/simple_module.py",
                     "main.py",
                     "example_custom_package_root_multi_prefix_reverse_order-0.0.1.dist-info/WHEEL",
@@ -329,7 +346,7 @@ UNKNOWN
             for line in record_contents.splitlines():
                 self.assertFalse(line.startswith("/"))
         self.assertFileSha256Equal(
-            filename, "8f44e940731757c186079a42cfe7ea3d43cd96b526e3fb2ca2a3ea3048a9d489"
+            filename, "372ef9e11fb79f1952172993718a326b5adda192d94884b54377c34b44394982"
         )
 
     def test_python_requires_wheel(self):
@@ -354,7 +371,7 @@ UNKNOWN
 """,
             )
         self.assertFileSha256Equal(
-            filename, "ba32493f5e43e481346384aaab9e8fa09c23884276ad057c5f432096a0350101"
+            filename, "10a325ba8f77428b5cfcff6345d508f5eb77c140889eb62490d7382f60d4ebfe"
         )
 
     def test_python_abi3_binary_wheel(self):
@@ -419,7 +436,7 @@ Tag: cp38-abi3-{os_string}_{arch}
                 ],
             )
         self.assertFileSha256Equal(
-            filename, "ac9216bd54dcae1a6270c35fccf8a73b0be87c1b026c28e963b7c76b2f9b722b"
+            filename, "85e44c43cc19ccae9fe2e1d629230203aa11791bed1f7f68a069fb58d1c93cd2"
         )
 
     def test_rule_expands_workspace_status_keys_in_wheel_metadata(self):
@@ -467,7 +484,6 @@ Tag: cp38-abi3-{os_string}_{arch}
                     if line.startswith(b"Requires-Dist:"):
                         requires.append(line.decode("utf-8").strip())
 
-            print(requires)
             self.assertEqual(
                 [
                     "Requires-Dist: tomli>=2.0.0",
@@ -478,6 +494,29 @@ Tag: cp38-abi3-{os_string}_{arch}
                 ],
                 requires,
             )
+
+    def test_empty_requires_file(self):
+        filename = self._get_path("empty_requires_files-0.0.1-py3-none-any.whl")
+
+        with zipfile.ZipFile(filename) as zf:
+            self.assertAllEntriesHasReproducibleMetadata(zf)
+            metadata_file = None
+            for f in zf.namelist():
+                if os.path.basename(f) == "METADATA":
+                    metadata_file = f
+            self.assertIsNotNone(metadata_file)
+
+            metadata = zf.read(metadata_file).decode("utf-8")
+            metadata_lines = metadata.splitlines()
+
+            requires = []
+            for i, line in enumerate(metadata_lines):
+                if line.startswith("Name:"):
+                    self.assertTrue(metadata_lines[i + 1].startswith("Version:"))
+                if line.startswith("Requires-Dist:"):
+                    requires.append(line.strip())
+
+            self.assertEqual([], requires)
 
     def test_minimal_data_files(self):
         filename = self._get_path("minimal_data_files-0.0.1-py3-none-any.whl")
@@ -522,6 +561,56 @@ Tag: cp38-abi3-{os_string}_{arch}
                     "Requires-Dist: pyyaml!=6.0.1,>=6.0.0; extra == 'example'",
                     'Requires-Dist: toml; ((python_version == "3.11" or python_version == "3.12") and python_version != "3.8") and extra == \'example\'',
                     'Requires-Dist: wheel; (python_version == "3.11" or python_version == "3.12") and extra == \'example\'',
+                ],
+                requires,
+            )
+
+    def test_requires_dist_depends_on_extras(self):
+        filename = self._get_path("requires_dist_depends_on_extras-0.0.1-py3-none-any.whl")
+
+        with zipfile.ZipFile(filename) as zf:
+            self.assertAllEntriesHasReproducibleMetadata(zf)
+            metadata_file = None
+            for f in zf.namelist():
+                if os.path.basename(f) == "METADATA":
+                    metadata_file = f
+            self.assertIsNotNone(metadata_file)
+
+            requires = []
+            with zf.open(metadata_file) as fp:
+                for line in fp:
+                    if line.startswith(b"Requires-Dist:"):
+                        requires.append(line.decode("utf-8").strip())
+
+            print(requires)
+            self.assertEqual(
+                [
+                    "Requires-Dist: extra_requires[example]==0.0.1",
+                ],
+                requires,
+            )
+
+    def test_requires_dist_depends_on_extras_file(self):
+        filename = self._get_path("requires_dist_depends_on_extras_using_file-0.0.1-py3-none-any.whl")
+
+        with zipfile.ZipFile(filename) as zf:
+            self.assertAllEntriesHasReproducibleMetadata(zf)
+            metadata_file = None
+            for f in zf.namelist():
+                if os.path.basename(f) == "METADATA":
+                    metadata_file = f
+            self.assertIsNotNone(metadata_file)
+
+            requires = []
+            with zf.open(metadata_file) as fp:
+                for line in fp:
+                    if line.startswith(b"Requires-Dist:"):
+                        requires.append(line.decode("utf-8").strip())
+
+            print(requires)
+            self.assertEqual(
+                [
+                    "Requires-Dist: extra_requires[example]==0.0.1",
                 ],
                 requires,
             )

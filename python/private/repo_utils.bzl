@@ -31,27 +31,35 @@ def _is_repo_debug_enabled(mrctx):
     """
     return _getenv(mrctx, REPO_DEBUG_ENV_VAR) == "1"
 
-def _logger(mrctx, name = None):
+def _logger(mrctx = None, name = None, verbosity_level = None):
     """Creates a logger instance for printing messages.
 
     Args:
         mrctx: repository_ctx or module_ctx object. If the attribute
             `_rule_name` is present, it will be included in log messages.
         name: name for the logger. Optional for repository_ctx usage.
+        verbosity_level: {type}`int | None` verbosity level. If not set,
+            taken from `mrctx`
 
     Returns:
         A struct with attributes logging: trace, debug, info, warn, fail.
+        Please use `return logger.fail` when using the `fail` method, because
+        it makes `buildifier` happy and ensures that other implementation of
+        the logger injected into the function work as expected by terminating
+        on the given line.
     """
-    if _is_repo_debug_enabled(mrctx):
-        verbosity_level = "DEBUG"
-    else:
-        verbosity_level = "WARN"
+    if verbosity_level == None:
+        if _is_repo_debug_enabled(mrctx):
+            verbosity_level = "DEBUG"
+        else:
+            verbosity_level = "WARN"
 
-    env_var_verbosity = _getenv(mrctx, REPO_VERBOSITY_ENV_VAR)
-    verbosity_level = env_var_verbosity or verbosity_level
+        env_var_verbosity = _getenv(mrctx, REPO_VERBOSITY_ENV_VAR)
+        verbosity_level = env_var_verbosity or verbosity_level
 
     verbosity = {
         "DEBUG": 2,
+        "FAIL": -1,
         "INFO": 1,
         "TRACE": 3,
     }.get(verbosity_level, 0)
@@ -93,6 +101,8 @@ def _execute_internal(
         arguments,
         environment = {},
         logger = None,
+        log_stdout = True,
+        log_stderr = True,
         **kwargs):
     """Execute a subprocess with debugging instrumentation.
 
@@ -111,6 +121,10 @@ def _execute_internal(
         logger: optional `Logger` to use for logging execution details. Must be
             specified when using module_ctx. If not specified, a default will
             be created.
+        log_stdout: If True (the default), write stdout to the logged message. Setting
+            to False can be useful for large stdout messages or for secrets.
+        log_stderr: If True (the default), write stderr to the logged message. Setting
+            to False can be useful for large stderr messages or for secrets.
         **kwargs: additional kwargs to pass onto rctx.execute
 
     Returns:
@@ -140,7 +154,7 @@ def _execute_internal(
     result = mrctx.execute(arguments, environment = environment, **kwargs)
 
     if fail_on_error and result.return_code != 0:
-        logger.fail((
+        return logger.fail((
             "repo.execute: {op}: end: failure:\n" +
             "  command: {cmd}\n" +
             "  return code: {return_code}\n" +
@@ -155,7 +169,7 @@ def _execute_internal(
             cwd = _cwd_to_str(mrctx, kwargs),
             timeout = _timeout_to_str(kwargs),
             env_str = _env_to_str(environment),
-            output = _outputs_to_str(result),
+            output = _outputs_to_str(result, log_stdout = log_stdout, log_stderr = log_stderr),
         ))
     elif _is_repo_debug_enabled(mrctx):
         logger.debug((
@@ -166,7 +180,7 @@ def _execute_internal(
             op = op,
             status = "success" if result.return_code == 0 else "failure",
             return_code = result.return_code,
-            output = _outputs_to_str(result),
+            output = _outputs_to_str(result, log_stdout = log_stdout, log_stderr = log_stderr),
         ))
 
     result_kwargs = {k: getattr(result, k) for k in dir(result)}
@@ -178,6 +192,8 @@ def _execute_internal(
             mrctx = mrctx,
             kwargs = kwargs,
             environment = environment,
+            log_stdout = log_stdout,
+            log_stderr = log_stderr,
         ),
         **result_kwargs
     )
@@ -215,7 +231,16 @@ def _execute_checked_stdout(*args, **kwargs):
     """Calls execute_checked, but only returns the stdout value."""
     return _execute_checked(*args, **kwargs).stdout
 
-def _execute_describe_failure(*, op, arguments, result, mrctx, kwargs, environment):
+def _execute_describe_failure(
+        *,
+        op,
+        arguments,
+        result,
+        mrctx,
+        kwargs,
+        environment,
+        log_stdout = True,
+        log_stderr = True):
     return (
         "repo.execute: {op}: failure:\n" +
         "  command: {cmd}\n" +
@@ -231,7 +256,7 @@ def _execute_describe_failure(*, op, arguments, result, mrctx, kwargs, environme
         cwd = _cwd_to_str(mrctx, kwargs),
         timeout = _timeout_to_str(kwargs),
         env_str = _env_to_str(environment),
-        output = _outputs_to_str(result),
+        output = _outputs_to_str(result, log_stdout = log_stdout, log_stderr = log_stderr),
     )
 
 def _which_checked(mrctx, binary_name):
@@ -252,7 +277,7 @@ def _which_checked(mrctx, binary_name):
 def _which_unchecked(mrctx, binary_name):
     """Tests to see if a binary exists.
 
-    This is also watch the `PATH` environment variable.
+    Watches the `PATH` environment variable if the binary doesn't exist.
 
     Args:
         binary_name: name of the binary to find.
@@ -264,12 +289,12 @@ def _which_unchecked(mrctx, binary_name):
         * `describe_failure`: `Callable | None`; takes no args. If the
           binary couldn't be found, provides a detailed error description.
     """
-    path = _getenv(mrctx, "PATH", "")
     binary = mrctx.which(binary_name)
     if binary:
         _watch(mrctx, binary)
         describe_failure = None
     else:
+        path = _getenv(mrctx, "PATH", "")
         describe_failure = lambda: _which_describe_failure(binary_name, path)
 
     return struct(
@@ -326,11 +351,11 @@ def _env_to_str(environment):
 def _timeout_to_str(kwargs):
     return kwargs.get("timeout", "<default timeout>")
 
-def _outputs_to_str(result):
+def _outputs_to_str(result, log_stdout = True, log_stderr = True):
     lines = []
     items = [
-        ("stdout", result.stdout),
-        ("stderr", result.stderr),
+        ("stdout", result.stdout if log_stdout else "<log_stdout = False; skipping>"),
+        ("stderr", result.stderr if log_stderr else "<log_stderr = False; skipping>"),
     ]
     for name, content in items:
         if content:
@@ -354,7 +379,7 @@ def _get_platforms_os_name(mrctx):
     """Return the name in @platforms//os for the host os.
 
     Args:
-        mrctx: module_ctx or repository_ctx.
+        mrctx: {type}`module_ctx | repository_ctx`
 
     Returns:
         `str`. The target name.
@@ -383,12 +408,15 @@ def _get_platforms_cpu_name(mrctx):
         `str`. The target name.
     """
     arch = mrctx.os.arch.lower()
+
     if arch in ["i386", "i486", "i586", "i686", "i786", "x86"]:
         return "x86_32"
     if arch in ["amd64", "x86_64", "x64"]:
         return "x86_64"
-    if arch in ["ppc", "ppc64", "ppc64le"]:
+    if arch in ["ppc", "ppc64"]:
         return "ppc"
+    if arch in ["ppc64le"]:
+        return "ppc64le"
     if arch in ["arm", "armv7l"]:
         return "arm"
     if arch in ["aarch64"]:

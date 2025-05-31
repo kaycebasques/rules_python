@@ -13,7 +13,7 @@ in this repository are simple aliases. On Bazel 7 and above `rules_python` uses
 a separate Starlark implementation,
 see {ref}`Migrating from the Bundled Rules` below.
 
-Once rules_python 1.0 is released, they will follow
+This repository follows
 [semantic versioning](https://semver.org) and the breaking change policy
 outlined in the [support](support) page.
 
@@ -67,7 +67,7 @@ components have examples in the {gh-path}`examples` directory.
 The core rules are currently available in Bazel as built-in symbols, but this
 form is deprecated. Instead, you should depend on rules_python in your
 `WORKSPACE` or `MODULE.bazel` file and load the Python rules from
-`@rules_python//python:defs.bzl` or load paths described in the API documentation.
+`@rules_python//python:<name>.bzl` or load paths described in the API documentation.
 
 A [buildifier](https://github.com/bazelbuild/buildtools/blob/master/buildifier/README.md)
 fix is available to automatically migrate `BUILD` and `.bzl` files to add the
@@ -95,13 +95,15 @@ See {gh-path}`Bzlmod support <BZLMOD_SUPPORT.md>` for any behaviour differences 
 :hidden:
 self
 getting-started
-pypi-dependencies
+pypi/index
 Toolchains <toolchains>
-pip
 coverage
 precompiling
 gazelle
+REPL <repl>
+Extending <extending>
 Contributing <contributing>
+devguide
 support
 Changelog <changelog>
 api/index

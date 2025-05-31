@@ -20,7 +20,7 @@ load("//python:py_runtime_pair.bzl", "py_runtime_pair")
 load("//python/cc:py_cc_toolchain.bzl", "py_cc_toolchain")
 load(":glob_excludes.bzl", "glob_excludes")
 load(":py_exec_tools_toolchain.bzl", "py_exec_tools_toolchain")
-load(":semver.bzl", "semver")
+load(":version.bzl", "version")
 
 _IS_FREETHREADED = Label("//python/config_settings:is_py_freethreaded")
 
@@ -53,8 +53,11 @@ def define_hermetic_runtime_toolchain_impl(
             use.
     """
     _ = name  # @unused
-    version_info = semver(python_version)
-    version_dict = version_info.to_dict()
+    version_info = version.parse(python_version)
+    version_dict = {
+        "major": version_info.release[0],
+        "minor": version_info.release[1],
+    }
     native.filegroup(
         name = "files",
         srcs = native.glob(
@@ -89,6 +92,14 @@ def define_hermetic_runtime_toolchain_impl(
         }),
         system_provided = True,
     )
+    cc_import(
+        name = "abi3_interface",
+        interface_library = select({
+            _IS_FREETHREADED: "libs/python3t.lib",
+            "//conditions:default": "libs/python3.lib",
+        }),
+        system_provided = True,
+    )
 
     native.filegroup(
         name = "includes",
@@ -97,7 +108,7 @@ def define_hermetic_runtime_toolchain_impl(
     cc_library(
         name = "python_headers",
         deps = select({
-            "@bazel_tools//src/conditions:windows": [":interface"],
+            "@bazel_tools//src/conditions:windows": [":interface", ":abi3_interface"],
             "//conditions:default": None,
         }),
         hdrs = [":includes"],
@@ -156,15 +167,22 @@ def define_hermetic_runtime_toolchain_impl(
                 "lib/libpython{major}.{minor}t.dylib".format(**version_dict),
             ],
             ":is_freethreaded_windows": [
-                "python3.dll",
+                "python3t.dll",
+                "python{major}{minor}t.dll".format(**version_dict),
                 "libs/python{major}{minor}t.lib".format(**version_dict),
+                "libs/python3t.lib",
             ],
             "@platforms//os:linux": [
                 "lib/libpython{major}.{minor}.so".format(**version_dict),
                 "lib/libpython{major}.{minor}.so.1.0".format(**version_dict),
             ],
             "@platforms//os:macos": ["lib/libpython{major}.{minor}.dylib".format(**version_dict)],
-            "@platforms//os:windows": ["python3.dll", "libs/python{major}{minor}.lib".format(**version_dict)],
+            "@platforms//os:windows": [
+                "python3.dll",
+                "python{major}{minor}.dll".format(**version_dict),
+                "libs/python{major}{minor}.lib".format(**version_dict),
+                "libs/python3.lib",
+            ],
         }),
     )
 
@@ -183,9 +201,9 @@ def define_hermetic_runtime_toolchain_impl(
         files = [":files"],
         interpreter = python_bin,
         interpreter_version_info = {
-            "major": str(version_info.major),
-            "micro": str(version_info.patch),
-            "minor": str(version_info.minor),
+            "major": str(version_info.release[0]),
+            "micro": str(version_info.release[2]),
+            "minor": str(version_info.release[1]),
         },
         coverage_tool = select({
             # Convert empty string to None

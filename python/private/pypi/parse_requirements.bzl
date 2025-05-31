@@ -30,6 +30,7 @@ load("//python/private:normalize_name.bzl", "normalize_name")
 load("//python/private:repo_utils.bzl", "repo_utils")
 load(":index_sources.bzl", "index_sources")
 load(":parse_requirements_txt.bzl", "parse_requirements_txt")
+load(":pep508_requirement.bzl", "requirement")
 load(":whl_target_platforms.bzl", "select_whls")
 
 def parse_requirements(
@@ -39,6 +40,7 @@ def parse_requirements(
         extra_pip_args = [],
         get_index_urls = None,
         evaluate_markers = None,
+        extract_url_srcs = True,
         logger = None):
     """Get the requirements with platforms that the requirements apply to.
 
@@ -53,27 +55,35 @@ def parse_requirements(
             of the distribution URLs from a PyPI index. Accepts ctx and
             distribution names to query.
         evaluate_markers: A function to use to evaluate the requirements.
-            Accepts the ctx and a dict where keys are requirement lines to
-            evaluate against the platforms stored as values in the input dict.
-            Returns the same dict, but with values being platforms that are
-            compatible with the requirements line.
+            Accepts a dict where keys are requirement lines to evaluate against
+            the platforms stored as values in the input dict. Returns the same
+            dict, but with values being platforms that are compatible with the
+            requirements line.
+        extract_url_srcs: A boolean to enable extracting URLs from requirement
+            lines to enable using bazel downloader.
         logger: repo_utils.logger or None, a simple struct to log diagnostic messages.
 
     Returns:
-        A tuple where the first element a dict of dicts where the first key is
-        the normalized distribution name (with underscores) and the second key
-        is the requirement_line, then value and the keys are structs with the
-        following attributes:
-         * distribution: The non-normalized distribution name.
-         * srcs: The Simple API downloadable source list.
-         * requirement_line: The original requirement line.
-         * target_platforms: The list of target platforms that this package is for.
-         * is_exposed: A boolean if the package should be exposed via the hub
+        {type}`dict[str, list[struct]]` where the key is the distribution name and the struct
+        contains the following attributes:
+         * `distribution`: {type}`str` The non-normalized distribution name.
+         * `srcs`: {type}`struct` The parsed requirement line for easier Simple
+           API downloading (see `index_sources` return value).
+         * `target_platforms`: {type}`list[str]` Target platforms that this package is for.
+             The format is `cp3{minor}_{os}_{arch}`.
+         * `is_exposed`: {type}`bool` `True` if the package should be exposed via the hub
            repository.
+         * `extra_pip_args`: {type}`list[str]` pip args to use in case we are
+           not using the bazel downloader to download the archives. This should
+           be passed to {obj}`whl_library`.
+         * `whls`: {type}`list[struct]` The list of whl entries that can be
+           downloaded using the bazel downloader.
+         * `sdist`: {type}`list[struct]` The sdist that can be downloaded using
+           the bazel downloader.
 
         The second element is extra_pip_args should be passed to `whl_library`.
     """
-    evaluate_markers = evaluate_markers or (lambda *_: {})
+    evaluate_markers = evaluate_markers or (lambda _ctx, _requirements: {})
     options = {}
     requirements = {}
     for file, plats in requirements_by_platform.items():
@@ -91,19 +101,20 @@ def parse_requirements(
         # The requirement lines might have duplicate names because lines for extras
         # are returned as just the base package name. e.g., `foo[bar]` results
         # in an entry like `("foo", "foo[bar] == 1.0 ...")`.
-        requirements_dict = {
-            normalize_name(entry[0]): entry
-            for entry in sorted(
-                parse_result.requirements,
-                # Get the longest match and fallback to original WORKSPACE sorting,
-                # which should get us the entry with most extras.
-                #
-                # FIXME @aignas 2024-05-13: The correct behaviour might be to get an
-                # entry with all aggregated extras, but it is unclear if we
-                # should do this now.
-                key = lambda x: (len(x[1].partition("==")[0]), x),
-            )
-        }.values()
+        # Lines with different markers are not condidered duplicates.
+        requirements_dict = {}
+        for entry in sorted(
+            parse_result.requirements,
+            # Get the longest match and fallback to original WORKSPACE sorting,
+            # which should get us the entry with most extras.
+            #
+            # FIXME @aignas 2024-05-13: The correct behaviour might be to get an
+            # entry with all aggregated extras, but it is unclear if we
+            # should do this now.
+            key = lambda x: (len(x[1].partition("==")[0]), x),
+        ):
+            req = requirement(entry[1])
+            requirements_dict[(req.name, req.version, req.marker)] = entry
 
         tokenized_options = []
         for opt in parse_result.options:
@@ -112,7 +123,7 @@ def parse_requirements(
 
         pip_args = tokenized_options + extra_pip_args
         for plat in plats:
-            requirements[plat] = requirements_dict
+            requirements[plat] = requirements_dict.values()
             options[plat] = pip_args
 
     requirements_by_platform = {}
@@ -164,50 +175,95 @@ def parse_requirements(
                 req.distribution: None
                 for reqs in requirements_by_platform.values()
                 for req in reqs.values()
+                if not req.srcs.url
             }),
         )
 
-    ret = {}
-    for whl_name, reqs in sorted(requirements_by_platform.items()):
+    ret = []
+    for name, reqs in sorted(requirements_by_platform.items()):
         requirement_target_platforms = {}
         for r in reqs.values():
             target_platforms = env_marker_target_platforms.get(r.requirement_line, r.target_platforms)
             for p in target_platforms:
                 requirement_target_platforms[p] = None
 
-        is_exposed = len(requirement_target_platforms) == len(requirements)
-        if not is_exposed and logger:
+        item = struct(
+            # Return normalized names
+            name = normalize_name(name),
+            is_exposed = len(requirement_target_platforms) == len(requirements),
+            is_multiple_versions = len(reqs.values()) > 1,
+            srcs = _package_srcs(
+                name = name,
+                reqs = reqs,
+                index_urls = index_urls,
+                env_marker_target_platforms = env_marker_target_platforms,
+                extract_url_srcs = extract_url_srcs,
+                logger = logger,
+            ),
+        )
+        ret.append(item)
+        if not item.is_exposed and logger:
             logger.debug(lambda: "Package '{}' will not be exposed because it is only present on a subset of platforms: {} out of {}".format(
-                whl_name,
+                name,
                 sorted(requirement_target_platforms),
                 sorted(requirements),
             ))
 
-        for r in sorted(reqs.values(), key = lambda r: r.requirement_line):
-            whls, sdist = _add_dists(
-                requirement = r,
-                index_urls = index_urls.get(whl_name),
-                logger = logger,
-            )
+    if logger:
+        logger.debug(lambda: "Will configure whl repos: {}".format([w.name for w in ret]))
 
-            target_platforms = env_marker_target_platforms.get(r.requirement_line, r.target_platforms)
-            ret.setdefault(whl_name, []).append(
+    return ret
+
+def _package_srcs(
+        *,
+        name,
+        reqs,
+        index_urls,
+        logger,
+        env_marker_target_platforms,
+        extract_url_srcs):
+    """A function to return sources for a particular package."""
+    srcs = []
+    for r in sorted(reqs.values(), key = lambda r: r.requirement_line):
+        whls, sdist = _add_dists(
+            requirement = r,
+            index_urls = index_urls.get(name),
+            logger = logger,
+        )
+
+        target_platforms = env_marker_target_platforms.get(r.requirement_line, r.target_platforms)
+        target_platforms = sorted(target_platforms)
+
+        all_dists = [] + whls
+        if sdist:
+            all_dists.append(sdist)
+
+        if extract_url_srcs and all_dists:
+            req_line = r.srcs.requirement
+        else:
+            all_dists = [struct(
+                url = "",
+                filename = "",
+                sha256 = "",
+                yanked = False,
+            )]
+            req_line = r.srcs.requirement_line
+
+        for dist in all_dists:
+            srcs.append(
                 struct(
-                    distribution = r.distribution,
-                    srcs = r.srcs,
-                    requirement_line = r.requirement_line,
-                    target_platforms = sorted(target_platforms),
+                    distribution = name,
                     extra_pip_args = r.extra_pip_args,
-                    whls = whls,
-                    sdist = sdist,
-                    is_exposed = is_exposed,
+                    requirement_line = req_line,
+                    target_platforms = target_platforms,
+                    filename = dist.filename,
+                    sha256 = dist.sha256,
+                    url = dist.url,
+                    yanked = dist.yanked,
                 ),
             )
 
-    if logger:
-        logger.debug(lambda: "Will configure whl repos: {}".format(ret.keys()))
-
-    return ret
+    return srcs
 
 def select_requirement(requirements, *, platform):
     """A simple function to get a requirement for a particular platform.
@@ -269,16 +325,43 @@ def _add_dists(*, requirement, index_urls, logger = None):
         index_urls: The result of simpleapi_download.
         logger: A logger for printing diagnostic info.
     """
+
+    if requirement.srcs.url:
+        if not requirement.srcs.filename:
+            if logger:
+                logger.debug(lambda: "Could not detect the filename from the URL, falling back to pip: {}".format(
+                    requirement.srcs.url,
+                ))
+            return [], None
+
+        # Handle direct URLs in requirements
+        dist = struct(
+            url = requirement.srcs.url,
+            filename = requirement.srcs.filename,
+            sha256 = requirement.srcs.shas[0] if requirement.srcs.shas else "",
+            yanked = False,
+        )
+
+        if dist.filename.endswith(".whl"):
+            return [dist], None
+        else:
+            return [], dist
+
     if not index_urls:
         return [], None
 
     whls = []
     sdist = None
 
-    # TODO @aignas 2024-05-22: it is in theory possible to add all
-    # requirements by version instead of by sha256. This may be useful
-    # for some projects.
-    for sha256 in requirement.srcs.shas:
+    # First try to find distributions by SHA256 if provided
+    shas_to_use = requirement.srcs.shas
+    if not shas_to_use:
+        version = requirement.srcs.version
+        shas_to_use = index_urls.sha256s_by_version.get(version, [])
+        if logger:
+            logger.warn(lambda: "requirement file has been generated without hashes, will use all hashes for the given version {} that could find on the index:\n    {}".format(version, shas_to_use))
+
+    for sha256 in shas_to_use:
         # For now if the artifact is marked as yanked we just ignore it.
         #
         # See https://packaging.python.org/en/latest/specifications/simple-repository-api/#adding-yank-support-to-the-simple-api
