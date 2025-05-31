@@ -89,21 +89,21 @@ class Worker:
             path = page["path"]
             self._current[path] = page["digest"]
         # Compare the content hashes to determine what pages have changed.
-        tmp = []
+        changed_paths = []
         for path in self._current:
             if path not in self._previous:
-                tmp.append(path)
+                changed_paths.append(path)
                 continue
             if self._current[path] != self._previous[path]:
-                tmp.append(path)
+                changed_paths.append(path)
                 continue
         for path in self._previous:
             if path not in self._current:
-                tmp.append(path)
+                changed_paths.append(path)
                 continue
         # Normalize the paths into docnames
         digest = []
-        for path in tmp:
+        for path in changed_paths:
             if not path.endswith(".rst"):
                 continue
             srcdir = self.args[0]
