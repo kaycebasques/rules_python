@@ -269,6 +269,8 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_
     run_args = []  # Copy of the args to forward along to debug runner
     args = ctx.actions.args()  # Args passed to the action
 
+    # NOTE: sphinx_build.py relies on the first two args being the srcdir and
+    # outputdir, in that order.
     args.add(source_path)
     args.add(output_dir.path)
 

@@ -5,7 +5,7 @@
 
 # -- Project info
 
-project = "Sphinx Docs Test xx"
+project = "Sphinx Docs Test"
 
 extensions = [
     "myst_parser",

@@ -1,16 +1,12 @@
-import argparse
 import contextlib
 import io
 import json
 import logging
 import os
-import pathlib
 import shutil
 import sys
-import time
 import traceback
 import typing
-from pathlib import Path
 
 import sphinx.application
 from sphinx.cmd.build import main
@@ -34,8 +30,8 @@ class Worker:
         # Bazel send worker stderr to the worker log file.
         # outputBase=$(bazel info output_base)
         # find $outputBase/bazel-workers/ -type f -printf '%T@ %p\n' | sort -n | tail -1 | awk '{print $2}'
-        logging.basicConfig(level=logging.DEBUG)
-        logger.info("initializing worker")
+        logging.basicConfig(level=logging.WARN)
+        logger.info("Initializing worker")
 
         # The directory that paths are relative to.
         self._exec_root = exec_root
@@ -114,12 +110,6 @@ class Worker:
         for entry in request["inputs"]:
             path = entry["path"]
             digest = entry["digest"]
-
-            ##mtime = pathlib.Path(path).stat().st_mtime
-            ##logger.info("incoming path %s mtime: %s", path, mtime)
-            ### Sphinx appears to treat 0 mtime as always changed
-            ##os.utime(path, (100, 100))
-
             # Make the path srcdir-relative so Sphinx understands it.
             path = path.removeprefix(srcdir + "/")
             incoming_digests[path] = digest
