@@ -143,6 +143,8 @@ def sphinx_docs(
         tools: {type}`list[label]` Additional tools that are used by Sphinx and its plugins.
             This just makes the tools available during Sphinx execution. To locate
             them, use {obj}`extra_opts` and `$(location)`.
+        use_persistent_workers: {type}`bool` (experimental) If enable, use a persistent
+            worker to run Sphinx for improved incremental, caching, and startup performance.
         **kwargs: {type}`dict` Common attributes to pass onto rules.
     """
     add_tag(kwargs, "@rules_python//sphinxdocs:sphinx_docs")
@@ -243,7 +245,7 @@ _sphinx_docs = rule(
         ),
         "sphinx": attr.label(
             executable = True,
-            cfg = "host",
+            cfg = "exec",
             mandatory = True,
             doc = "Sphinx binary to generate documentation.",
         ),

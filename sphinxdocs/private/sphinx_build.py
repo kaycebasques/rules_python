@@ -1,32 +1,33 @@
-from pathlib import Path
-
-import shutil
-import contextlib
 import argparse
+import contextlib
+import io
 import json
 import logging
 import os
 import pathlib
+import shutil
 import sys
 import time
 import traceback
 import typing
-import io
+from pathlib import Path
+
 import sphinx.application
-
 from sphinx.cmd.build import main
-
 
 WorkRequest = object
 WorkResponse = object
 
-logger = logging.getLogger('sphinxdocs-build')
+logger = logging.getLogger("sphinxdocs_build")
 
 _WORKER_SPHINX_EXT_MODULE_NAME = "bazel_worker_sphinx_ext"
 
+
 class Worker:
 
-    def __init__(self, instream: "typing.TextIO", outstream: "typing.TextIO", exec_root: str):
+    def __init__(
+        self, instream: "typing.TextIO", outstream: "typing.TextIO", exec_root: str
+    ):
         # NOTE: Sphinx performs its own logging re-configuration, so any
         # logging config we do isn't respected by Sphinx. Controlling where
         # stdout and stderr goes are the main mechanisms. Recall that
@@ -109,10 +110,7 @@ class Worker:
         incoming_digests = {}
         current_digests = self._digests.setdefault(srcdir, {})
         changed_paths = []
-        request_info = {
-            "exec_root": self._exec_root,
-            "inputs": request["inputs"]
-        }
+        request_info = {"exec_root": self._exec_root, "inputs": request["inputs"]}
         for entry in request["inputs"]:
             path = entry["path"]
             digest = entry["digest"]
@@ -174,11 +172,12 @@ class Worker:
 
         if exit_code:
             raise Exception(
-                "Sphinx main() returned failure: " +
-                f"  exit code: {exit_code}\n" +
-                    "========== STDOUT START ==========\n" +
-                    stdout.getvalue().rstrip("\n") + "\n" +
-                    "========== STDOUT END ==========\n"
+                "Sphinx main() returned failure: "
+                + f"  exit code: {exit_code}\n"
+                + "========== STDOUT START ==========\n"
+                + stdout.getvalue().rstrip("\n")
+                + "\n"
+                + "========== STDOUT END ==========\n"
             )
 
         # Copying is unfortunately necessary because Bazel doesn't know to
@@ -193,32 +192,31 @@ class Worker:
         return response
 
 
-
-# todo: make this parallel-safe
 class BazelWorkerExtension:
+    """A Sphinx extension implemented as a class acting like a module."""
+
     def __init__(self):
+        # Make it look like a Module object
         self.__name__ = _WORKER_SPHINX_EXT_MODULE_NAME
         # set[str] of src-dir relative path names
         self.changed_paths = set()
 
     def setup(self, app):
-        app.connect('env-get-outdated', self._handle_env_get_outdated)
-        return {
-                "parallel_read_safe": True,
-                "parallel_write_safe": True
-        }
+        app.connect("env-get-outdated", self._handle_env_get_outdated)
+        return {"parallel_read_safe": True, "parallel_write_safe": True}
 
     def _handle_env_get_outdated(self, app, env, added, changed, removed):
         changed = {
             # NOTE: path2doc returns None if it's not a doc path
-            env.path2doc(p) for p in self.changed_paths
+            env.path2doc(p)
+            for p in self.changed_paths
         }
         logger.info("changed docs: %s", changed)
         return changed
 
 
 if __name__ == "__main__":
-    if '--persistent_worker' in sys.argv:
+    if "--persistent_worker" in sys.argv:
         with Worker(sys.stdin, sys.stdout, os.getcwd()) as worker:
             sys.exit(worker.run())
     else:
