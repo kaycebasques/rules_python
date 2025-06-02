@@ -13,16 +13,3 @@ extensions = [
 myst_enable_extensions = [
     "colon_fence",
 ]
-
-import logging
-logger = logging.getLogger('conf')
-
-def on_env_get_outdated(*args, **kwargs):
-    logger.info("env-get-outdated args: %s", args)
-    logger.info("env-get-outdated kwargs: %s", kwargs)
-    return []
-
-
-def setup(app):
-
-    app.connect('env-get-outdated', on_env_get_outdated)
