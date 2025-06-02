@@ -210,4 +210,5 @@ if __name__ == "__main__":
         with Worker(sys.stdin, sys.stdout, os.getcwd()) as worker:
             sys.exit(worker.run())
     else:
+        raise Exception("non-worker path taken")
         sys.exit(main())
