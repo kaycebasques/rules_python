@@ -254,7 +254,7 @@ _sphinx_docs = rule(
             doc = "Additional tools that are used by Sphinx and its plugins.",
         ),
         "use_persistent_workers": attr.bool(
-            doc = "TODO",
+            doc = "(experimental) Whether to invoke Sphinx as a persistent worker.",
             default = False,
         ),
         "_extra_defines_flag": attr.label(default = "//sphinxdocs:extra_defines"),
