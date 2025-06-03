@@ -210,7 +210,7 @@ def _worker_main(stdin, stdout, exec_root):
         return worker.run()
 
 
-def _non_worker_main(argv):
+def _non_worker_main():
     args = []
     for arg in sys.argv:
         if arg.startswith("@"):
