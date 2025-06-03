@@ -201,14 +201,29 @@ class BazelWorkerExtension:
             env.path2doc(p)
             for p in self.changed_paths
         }
+
         logger.info("changed docs: %s", changed)
         return changed
 
+def _worker_main(stdin, stdout, exec_root):
+    with Worker(stdin, stdout, exec_root) as worker:
+        return worker.run()
+
+
+def _non_worker_main(argv):
+    args = []
+    for arg in sys.argv:
+        if arg.startswith("@"):
+            with open(arg.removeprefix("@")) as fp:
+                lines = [line.strip() for line in fp if line.strip()]
+            args.extend(lines)
+        else:
+            args.append(arg)
+    sys.argv[:] = args
+    return main()
 
 if __name__ == "__main__":
     if "--persistent_worker" in sys.argv:
-        with Worker(sys.stdin, sys.stdout, os.getcwd()) as worker:
-            sys.exit(worker.run())
+        sys.exit(_worker_main(sys.stdin, sys.stdout, os.getcwd()))
     else:
-        raise Exception("non-worker path taken")
-        sys.exit(main())
+        sys.exit(_non_worker_main())

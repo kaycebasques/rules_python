@@ -269,6 +269,12 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_
     run_args = []  # Copy of the args to forward along to debug runner
     args = ctx.actions.args()  # Args passed to the action
 
+    # An args file is required for persistent workers, but we don't know if
+    # the action will use worker mode or not (settings we can't see may
+    # force non-worker mode). For consistency, always use a params file.
+    args.use_param_file("@%s", use_always = True)
+    args.set_param_file_format("multiline")
+
     # NOTE: sphinx_build.py relies on the first two args being the srcdir and
     # outputdir, in that order.
     args.add(source_path)
@@ -289,7 +295,8 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_
 
     if use_persistent_workers:
         # * Normally Sphinx puts doctrees in the output dir. We can't do that
-        #   because Bazel will clear the output directory every invocation.
+        #   because Bazel will clear the output directory every invocation. To
+        #   work around that, create it as a sibling directory.
         # * Use a non-dot prefixed name so it shows up more visibly.
         args.add(paths.join(output_dir.path + "_doctrees"), format = "--doctree-dir=%s")
 
@@ -318,10 +325,11 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_
     for tool in ctx.attr.tools:
         tools.append(tool[DefaultInfo].files_to_run)
 
+    # NOTE: Command line flags or RBE capabilities may override the execution
+    # requirements and disable workers. Thus, we can't assume that these
+    # exec requirements will actually be respected.
     execution_requirements = {}
     if use_persistent_workers:
-        args.use_param_file("@%s", use_always = True)
-        args.set_param_file_format("multiline")
         execution_requirements["supports-workers"] = "1"
         execution_requirements["requires-worker-protocol"] = "json"
 
