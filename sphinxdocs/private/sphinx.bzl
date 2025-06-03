@@ -293,18 +293,15 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_
     # Don't add to run_args: parallel building breaks interactive debugging
     args.add("--jobs=auto")
 
-    if use_persistent_workers:
-        # * Normally Sphinx puts doctrees in the output dir. We can't do that
-        #   because Bazel will clear the output directory every invocation. To
-        #   work around that, create it as a sibling directory.
-        # * Use a non-dot prefixed name so it shows up more visibly.
-        args.add(paths.join(output_dir.path + "_doctrees"), format = "--doctree-dir=%s")
-
-    else:
-        # These aren't added to run_args because we assume direct invocations
-        # will add them if necessary.
-        args.add("--fresh-env")  # Don't try to use cache files. Bazel can't make use of them.
-        args.add("--write-all")  # Write all files; don't try to detect "changed" files
+    # Put the doctree dir outside of the output directory.
+    # This allows it to be reused between invocations when possible; Bazel
+    # clears the output directory every action invocation.
+    # * For workers, they can fully re-use it.
+    # * For non-workers, it can be reused when sandboxing is disabled via
+    #   the `no-sandbox` tag or execution requirement.
+    #
+    # We also use a non-dot prefixed name so it shows up more visibly.
+    args.add(paths.join(output_dir.path + "_doctrees"), format = "--doctree-dir=%s")
 
     for opt in ctx.attr.extra_opts:
         expanded = ctx.expand_location(opt)
