@@ -18,6 +18,9 @@ logger = logging.getLogger("sphinxdocs_build")
 
 _WORKER_SPHINX_EXT_MODULE_NAME = "bazel_worker_sphinx_ext"
 
+# Config value name for getting the path to the request info file
+_REQUEST_INFO_CONFIG_NAME = "bazel_worker_request_info_path"
+
 
 class Worker:
 
@@ -75,7 +78,7 @@ class Worker:
                 except Exception:
                     logger.exception("Unhandled error: request=%s", request)
                     output = (
-                        f"Unhandled error:\nRequest: {request}\n"
+                        f"Unhandled error:\nRequest id: {request.get('id')}\n"
                         + traceback.format_exc()
                     )
                     request_id = 0 if not request else request.get("requestId", 0)
@@ -133,7 +136,7 @@ class Worker:
         request_info_path = os.path.join(srcdir, "_bazel_worker_request_info.json")
         with open(request_info_path, "w") as fp:
             json.dump(request_info, fp)
-        sphinx_args.append(f"--define=bazel_worker_request_info={request_info_path}")
+        sphinx_args.append(f"--define={_REQUEST_INFO_CONFIG_NAME}={request_info_path}")
 
         return worker_outdir, bazel_outdir, sphinx_args
 
@@ -192,6 +195,7 @@ class BazelWorkerExtension:
         self.changed_paths = set()
 
     def setup(self, app):
+        app.add_config_value(_REQUEST_INFO_CONFIG_NAME, "", "")
         app.connect("env-get-outdated", self._handle_env_get_outdated)
         return {"parallel_read_safe": True, "parallel_write_safe": True}
 
