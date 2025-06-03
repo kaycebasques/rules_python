@@ -27,7 +27,7 @@ Bazel:
   visible to subsequent invocations. This can be done multiple ways:
   * Set `tags = ["no-sandbox"]` on the `sphinx_docs` target
   * `--modify_execution_info=SphinxBuildDocs=+no-sandbox` (Bazel flag)
-  * `--strategy=SphinxBuildDocs=local`  (Bazel flag)
+  * `--strategy=SphinxBuildDocs=local` (Bazel flag)
 * Use persistent workers (enabled by default) by setting
   `allow_persistent_workers=True` on the `sphinx_docs` target. Note that other
   Bazel flags can disable using workers even if an action supports it. Setting
