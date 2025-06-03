@@ -103,7 +103,7 @@ def sphinx_docs(
         strip_prefix = "",
         extra_opts = [],
         tools = [],
-        use_persistent_workers = False,
+        allow_persistent_workers = True,
         **kwargs):
     """Generate docs using Sphinx.
 
@@ -143,8 +143,9 @@ def sphinx_docs(
         tools: {type}`list[label]` Additional tools that are used by Sphinx and its plugins.
             This just makes the tools available during Sphinx execution. To locate
             them, use {obj}`extra_opts` and `$(location)`.
-        use_persistent_workers: {type}`bool` (experimental) If enable, use a persistent
-            worker to run Sphinx for improved incremental, caching, and startup performance.
+        allow_persistent_workers: {type}`bool` (experimental) If true, allow
+            using persistent workers for running Sphinx, if Bazel decides to do so.
+            This can improve incremental building of docs.
         **kwargs: {type}`dict` Common attributes to pass onto rules.
     """
     add_tag(kwargs, "@rules_python//sphinxdocs:sphinx_docs")
@@ -168,7 +169,7 @@ def sphinx_docs(
         source_tree = internal_name + "/_sources",
         extra_opts = extra_opts,
         tools = tools,
-        use_persistent_workers = use_persistent_workers,
+        allow_persistent_workers = allow_persistent_workers,
         **kwargs
     )
 
@@ -213,7 +214,7 @@ def _sphinx_docs_impl(ctx):
             source_path = source_dir_path,
             output_prefix = paths.join(ctx.label.name, "_build"),
             inputs = inputs,
-            use_persistent_workers = ctx.attr.use_persistent_workers,
+            allow_persistent_workers = ctx.attr.allow_persistent_workers,
         )
         outputs[format] = output_dir
         per_format_args[format] = args_env
@@ -253,7 +254,7 @@ _sphinx_docs = rule(
             cfg = "exec",
             doc = "Additional tools that are used by Sphinx and its plugins.",
         ),
-        "use_persistent_workers": attr.bool(
+        "allow_persistent_workers": attr.bool(
             doc = "(experimental) Whether to invoke Sphinx as a persistent worker.",
             default = False,
         ),
@@ -263,7 +264,7 @@ _sphinx_docs = rule(
     },
 )
 
-def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_workers):
+def _run_sphinx(ctx, format, source_path, inputs, output_prefix, allow_persistent_workers):
     output_dir = ctx.actions.declare_directory(paths.join(output_prefix, format))
 
     run_args = []  # Copy of the args to forward along to debug runner
@@ -326,7 +327,7 @@ def _run_sphinx(ctx, format, source_path, inputs, output_prefix, use_persistent_
     # requirements and disable workers. Thus, we can't assume that these
     # exec requirements will actually be respected.
     execution_requirements = {}
-    if use_persistent_workers:
+    if allow_persistent_workers:
         execution_requirements["supports-workers"] = "1"
         execution_requirements["requires-worker-protocol"] = "json"
 

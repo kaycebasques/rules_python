@@ -70,7 +70,6 @@ sphinx_docs(
     strip_prefix = package_name() + "/",
     tags = ["docs"],
     target_compatible_with = _TARGET_COMPATIBLE_WITH,
-    use_persistent_workers = True,
     deps = [
         ":bzl_api_docs",
         ":py_api_srcs",
