@@ -235,6 +235,10 @@ def _sphinx_docs_impl(ctx):
 _sphinx_docs = rule(
     implementation = _sphinx_docs_impl,
     attrs = {
+        "allow_persistent_workers": attr.bool(
+            doc = "(experimental) Whether to invoke Sphinx as a persistent worker.",
+            default = False,
+        ),
         "extra_opts": attr.string_list(
             doc = "Additional options to pass onto Sphinx. These are added after " +
                   "other options, but before the source/output args.",
@@ -253,10 +257,6 @@ _sphinx_docs = rule(
         "tools": attr.label_list(
             cfg = "exec",
             doc = "Additional tools that are used by Sphinx and its plugins.",
-        ),
-        "allow_persistent_workers": attr.bool(
-            doc = "(experimental) Whether to invoke Sphinx as a persistent worker.",
-            default = False,
         ),
         "_extra_defines_flag": attr.label(default = "//sphinxdocs:extra_defines"),
         "_extra_env_flag": attr.label(default = "//sphinxdocs:extra_env"),

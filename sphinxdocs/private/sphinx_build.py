@@ -205,6 +205,7 @@ class BazelWorkerExtension:
         logger.info("changed docs: %s", changed)
         return changed
 
+
 def _worker_main(stdin, stdout, exec_root):
     with Worker(stdin, stdout, exec_root) as worker:
         return worker.run()
@@ -221,6 +222,7 @@ def _non_worker_main():
             args.append(arg)
     sys.argv[:] = args
     return main()
+
 
 if __name__ == "__main__":
     if "--persistent_worker" in sys.argv:
